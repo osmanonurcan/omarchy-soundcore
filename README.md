@@ -55,7 +55,25 @@ OpenSCQ30-paired device is currently connected over Bluetooth:
 
 If no supported device is connected, or your specific model doesn't expose
 sound mode/EQ settings in OpenSCQ30, the panel says so plainly instead of
-showing empty controls.
+showing empty controls. If a change can't be applied or the settings can't be
+read (for example because another OpenSCQ30 client, such as its GUI, is
+connected to the headphones), the panel shows the reason.
+
+OpenSCQ30 allows one connection to a device at a time, so the plugin only
+connects to your headphones while the panel is open: to read their settings
+when it opens and every 12 seconds after, and to apply your changes. While it
+is closed, the bar icon just checks every 12 seconds whether they're connected
+over Bluetooth.
+
+## Development
+
+The tests need `node`, `jq` and `flock` and use a fake `openscq30-cli`, so no
+headphones are required:
+
+```
+node --test tests/
+tests/scripts.test.sh
+```
 
 ## License
 

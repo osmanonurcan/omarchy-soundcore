@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import Quickshell
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
@@ -11,14 +10,27 @@ Panel {
   moduleName: "io.github.s-w-3.soundcore"
   ipcTarget: "io.github.s-w-3.soundcore"
 
-  readonly property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/io.github.s-w-3.soundcore"
+  readonly property string statusScript: Model.localPath(Qt.resolvedUrl("soundcore-status"))
+  readonly property string setScript: Model.localPath(Qt.resolvedUrl("soundcore-set"))
 
   property var status: ({ connected: false })
   property var pendingBands: []
   property var draggingFlags: [false, false, false, false, false, false, false, false]
   readonly property bool anyDragging: draggingFlags.indexOf(true) !== -1
 
+  // Writes not yet confirmed by a status read, by setting id. Queued ones
+  // wait for the in-flight soundcore-set to finish, then go out together.
+  property var queuedWrites: ({})
+  property var inflightWrites: ({})
+  property string writeError: ""
+  property bool refreshQueued: false
+
   readonly property bool connected: !!status.connected
+  readonly property bool detailed: !!status.detailed
+  readonly property string readError: status.error || ""
+  readonly property string errorText: writeError !== ""
+    ? "Couldn't change the setting: " + writeError
+    : (readError !== "" ? "Couldn't read the headphones' settings: " + readError : "")
   readonly property var schemaList: status.schema || []
   readonly property var values: status.values || {}
   readonly property string deviceName: status.name || "Soundcore"
@@ -52,10 +64,18 @@ Panel {
 
   function ambientOptions() { return Model.buildOptions(ambientSetting) }
   function ancOptions() { return Model.buildOptions(ancSetting) }
-  function presetOptions() { return Model.buildOptions(presetSetting) }
+  function presetOptions() { return Model.presetOptions(presetSetting, presetValue) }
 
   function refresh() {
-    if (!statusProc.running) statusProc.running = true
+    if (statusProc.running) {
+      root.refreshQueued = true
+      return
+    }
+    // Reading settings means connecting to the headphones, and openscq30
+    // allows one connection at a time. While the panel is closed the bar icon
+    // only needs to know whether they're connected, so don't hold the device.
+    statusProc.command = root.opened ? [root.statusScript] : [root.statusScript, "--quick"]
+    statusProc.running = true
   }
 
   function refreshSoon() {
@@ -63,16 +83,43 @@ Panel {
   }
 
   function updateStatus(raw) {
-    var parsed = Model.parseStatus(raw)
-    root.status = parsed
-    var bands = parsed.connected && parsed.values ? parsed.values.volumeAdjustments : null
+    var next = Model.mergeStatus(root.status, Model.parseStatus(raw))
+    root.status = Model.withPendingWrites(next, root.inflightWrites, root.queuedWrites)
+    var bands = root.status.values ? root.status.values.volumeAdjustments : null
     if (Array.isArray(bands) && !root.anyDragging) root.pendingBands = bands.slice()
   }
 
+  // Shows the change right away, then writes it once nothing else is being
+  // written, so quick successive changes coalesce instead of being dropped.
   function setSetting(id, value) {
-    if (!root.status.mac) return
-    setProc.command = [root.pluginDir + "/soundcore-set", root.status.mac, id + "=" + value]
+    if (!root.connected || !root.status.mac) return
+    if (Model.sameValue(root.values[id], value)) return
+    var queued = Object.assign({}, root.queuedWrites)
+    queued[id] = value
+    root.queuedWrites = queued
+    root.status = Model.withPendingWrites(root.status, root.inflightWrites, root.queuedWrites)
+    flushWrites()
+  }
+
+  function flushWrites() {
+    if (setProc.running) return
+    var args = Model.setArgs(root.queuedWrites)
+    if (args.length === 0) return
+    if (!root.status.mac) {
+      root.queuedWrites = ({})
+      return
+    }
+    root.inflightWrites = root.queuedWrites
+    root.queuedWrites = ({})
+    setProc.command = [root.setScript, root.status.mac].concat(args)
     setProc.running = true
+  }
+
+  function finishWrite(exitCode, exitStatus) {
+    root.writeError = exitCode === 0 && exitStatus === 0 ? "" : Model.errorMessage(setErr.text, exitCode)
+    root.inflightWrites = ({})
+    if (Model.setArgs(root.queuedWrites).length > 0) root.flushWrites()
+    else root.refreshSoon()
   }
 
   function setDragging(index, dragging) {
@@ -92,23 +139,34 @@ Panel {
   }
 
   function commitBands() {
-    setSetting("volumeAdjustments", Model.csvFromBands(root.pendingBands))
+    setSetting("volumeAdjustments", root.pendingBands.slice())
   }
 
-  onOpenedChanged: if (opened) refresh()
+  onOpenedChanged: {
+    if (!opened) return
+    root.writeError = ""
+    refresh()
+  }
+
+  Component.onCompleted: refresh()
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   Process {
     id: statusProc
-    command: [root.pluginDir + "/soundcore-status"]
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.updateStatus(text) }
+    onExited: {
+      if (!root.refreshQueued) return
+      root.refreshQueued = false
+      root.refresh()
+    }
   }
 
   Process {
     id: setProc
-    onExited: root.refreshSoon()
+    stderr: StdioCollector { id: setErr; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) { root.finishWrite(exitCode, exitStatus) }
   }
 
   Timer {
@@ -118,11 +176,12 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  // Paused while a slider is held so a status read can't hold the device
+  // when the drag's value is written.
   Timer {
     interval: 12000
     running: !root.anyDragging
     repeat: true
-    triggeredOnStart: true
     onTriggered: root.refresh()
   }
 
@@ -195,7 +254,29 @@ Panel {
           }
 
           Text {
-            visible: root.connected && !root.hasControls
+            visible: root.connected && root.errorText !== ""
+            width: parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: root.errorText
+            color: root.bar.urgent
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          Text {
+            visible: root.connected && !root.detailed && root.readError === ""
+            width: parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: "Reading settings from your headphones…"
+            color: Qt.darker(root.bar.foreground, 1.3)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.bodySmall
+          }
+
+          Text {
+            visible: root.connected && root.detailed && !root.hasControls && root.readError === ""
             width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
@@ -272,13 +353,19 @@ Panel {
             }
 
             Dropdown {
+              id: presetDropdown
               width: parent.width
               showLabel: false
               options: root.presetOptions()
               value: root.presetValue
               foreground: root.bar.foreground
               fontFamily: root.bar.fontFamily
-              onChanged: function(v) { root.setSetting("presetEqualizerProfile", v) }
+              onChanged: function(v) {
+                root.setSetting("presetEqualizerProfile", v)
+                // Dropdown assigns its own `value` when an option is picked,
+                // which would otherwise break the binding above for good.
+                presetDropdown.value = Qt.binding(function() { return root.presetValue })
+              }
             }
 
             PanelSectionHeader {
