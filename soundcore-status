@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
+# Usage: soundcore-status [--quick]
+#
 # Emits one JSON blob describing whichever openscq30-paired Soundcore device
-# is currently connected over Bluetooth, including the settings openscq30
-# exposes for it (varies per model) and their current values.
+# is currently connected over Bluetooth. A full read connects to the device
+# and adds the settings openscq30 exposes for it (varies per model) and their
+# current values; if that fails, "error" says why. --quick stops once the
+# device is found, without connecting to it -- all the bar icon needs.
 set -uo pipefail
 
-# openscq30 allows one connection per device; serialize with soundcore-set.
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock"
-flock 9
+quick=false
+[ "${1:-}" = "--quick" ] && quick=true
+
+# Bound every device call so a wedged Bluetooth connection can't hold the
+# lock, and the panel's status process, forever.
+call_timeout=${SOUNDCORE_CALL_TIMEOUT:-15}
+lock_timeout=${SOUNDCORE_LOCK_TIMEOUT:-40}
 
 paired_json=$(openscq30-cli paired-devices list --json 2>/dev/null)
 [ -z "$paired_json" ] && paired_json='[]'
@@ -35,10 +43,62 @@ if [ -z "$mac" ]; then
   exit 0
 fi
 
-schema_json=$(openscq30-cli device --mac-address "$mac" list-settings --json 2>/dev/null)
-[ -z "$schema_json" ] && schema_json='[]'
+filtered_schema='[]'
+values_map='{}'
+error=""
 
-filtered_schema=$(jq '[.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")]' <<<"$schema_json")
+emit() {
+  jq -n \
+    --arg mac "$mac" \
+    --arg name "$name" \
+    --arg model "$model" \
+    --argjson detailed "$1" \
+    --argjson schema "$filtered_schema" \
+    --argjson values "$values_map" \
+    --arg error "$error" \
+    '{connected:true, detailed:$detailed, mac:$mac, name:$name, model:$model}
+     + if $detailed then {schema:$schema, values:$values} else {} end
+     + if $error != "" then {error:$error} else {} end'
+}
+
+if $quick; then
+  emit false
+  exit 0
+fi
+
+errfile=$(mktemp) || exit 1
+trap 'rm -f "$errfile"' EXIT
+
+# device_call <args...>: runs `openscq30-cli device` against $mac with its
+# stdout in $out. On failure, records the first failure's reason in $error.
+device_call() {
+  local rc=0
+  out=$(timeout "$call_timeout" openscq30-cli device --mac-address "$mac" "$@" 2>"$errfile") || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  if [ -z "$error" ]; then
+    if [ "$rc" -eq 124 ]; then
+      error="timed out talking to the headphones"
+    else
+      error=$(grep -v '^[[:space:]]*$' "$errfile" | tail -n 1 | sed 's/^Error: *//' | cut -c1-200)
+      [ -n "$error" ] || error="openscq30-cli exited with status $rc"
+    fi
+  fi
+  return "$rc"
+}
+
+# openscq30 allows one connection per device; serialize with soundcore-set.
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock"
+if ! flock -w "$lock_timeout" 9; then
+  error="timed out waiting for another Soundcore command to finish"
+  emit true
+  exit 0
+fi
+
+schema_json='[]'
+device_call list-settings --json && schema_json=$out
+
+filtered_schema=$(jq -c '[.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")]' <<<"$schema_json" 2>/dev/null)
+[ -n "$filtered_schema" ] || filtered_schema='[]'
 
 ids=$(jq -r '
   [.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")
@@ -56,18 +116,11 @@ while IFS= read -r id; do
   get_args+=(--get "$id")
 done <<<"$ids"
 
-values_json='[]'
 if [ "${#get_args[@]}" -gt 0 ]; then
-  values_json=$(openscq30-cli device --mac-address "$mac" setting "${get_args[@]}" --json 2>/dev/null)
-  [ -z "$values_json" ] && values_json='[]'
+  # On a partial failure openscq30-cli still prints the values it did read.
+  device_call setting "${get_args[@]}" --json
+  values_map=$(jq -c '[.[] | {(.settingId): .value.value}] | add // {}' <<<"$out" 2>/dev/null)
+  [ -n "$values_map" ] || values_map='{}'
 fi
 
-values_map=$(jq '[.[] | {(.settingId): .value.value}] | add // {}' <<<"$values_json")
-
-jq -n \
-  --arg mac "$mac" \
-  --arg name "$name" \
-  --arg model "$model" \
-  --argjson schema "$filtered_schema" \
-  --argjson values "$values_map" \
-  '{connected:true, mac:$mac, name:$name, model:$model, schema:$schema, values:$values}'
+emit true

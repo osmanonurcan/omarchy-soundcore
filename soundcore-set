@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # Usage: soundcore-set <mac-address> <settingId=value> [<settingId=value> ...]
+#
+# Applies the settings in order over a single connection. On failure, exits
+# non-zero with the reason on stderr.
 set -euo pipefail
+
+if [ "$#" -lt 2 ]; then
+  echo "usage: soundcore-set <mac-address> <settingId=value> [<settingId=value> ...]" >&2
+  exit 2
+fi
 
 mac="$1"
 shift
@@ -10,4 +18,19 @@ for kv in "$@"; do
   args+=(--set "$kv")
 done
 
-exec flock "${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock" openscq30-cli device --mac-address "$mac" setting "${args[@]}"
+call_timeout=${SOUNDCORE_CALL_TIMEOUT:-15}
+lock_timeout=${SOUNDCORE_LOCK_TIMEOUT:-40}
+
+# openscq30 allows one connection per device; serialize with soundcore-status.
+exec 9>"${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock"
+if ! flock -w "$lock_timeout" 9; then
+  echo "Error: timed out waiting for another Soundcore command to finish" >&2
+  exit 1
+fi
+
+rc=0
+timeout "$call_timeout" openscq30-cli device --mac-address "$mac" setting "${args[@]}" || rc=$?
+if [ "$rc" -eq 124 ]; then
+  echo "Error: timed out talking to the headphones" >&2
+fi
+exit "$rc"
