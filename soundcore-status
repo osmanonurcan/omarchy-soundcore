@@ -100,9 +100,12 @@ device_call list-settings --json && schema_json=$out
 filtered_schema=$(jq -c '[.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")]' <<<"$schema_json" 2>/dev/null)
 [ -n "$filtered_schema" ] || filtered_schema='[]'
 
+# The setting types the panel can show; keep in step with CONTROL_TYPES in
+# Model.js.
 ids=$(jq -r '
   [.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")
-       | .settings[] | select(.type=="select" or .type=="optionalSelect" or .type=="equalizer")
+       | .settings[]
+       | select(.type | IN("select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer"))
        | .settingId]
   + [.[] | select(.categoryId=="deviceInformation")
         | .settings[] | select(.settingId | test("battery"; "i"))

@@ -46,10 +46,12 @@ t_full_status() {
     .connected and .detailed and .mac == $mac and .name == "Soundcore Space Q45"
     and .model == "SoundcoreA3040" and (has("error") | not)
     and ([.schema[].categoryId] == ["soundModes", "equalizer"])
-    and .values.ambientSoundMode == "Normal"
-    and .values.volumeAdjustments == [0,0,0,0,0,0,0,0]
-    and .values.batteryLevel == "4/5"
-    and (.values | has("firmwareVersion") | not)
+    and .values == {
+      ambientSoundMode: "NoiseCanceling", transparencyMode: "Manual", noiseCancelingMode: "Adaptive",
+      manualNoiseCanceling: 5, windNoiseSuppression: true, manualTransparency: 5,
+      presetEqualizerProfile: "Lounge", customEqualizerProfile: null,
+      volumeAdjustments: [-10,20,40,30,0,-20,20,10], batteryLevel: "4/5"
+    }
   ' <<<"$out" >/dev/null
 }
 
@@ -107,13 +109,42 @@ t_quick_status_does_not_wait_for_lock() {
 
 t_set_applies_several_settings_in_one_connection() {
   setup
-  "$root/soundcore-set" "$mac" ambientSoundMode=NoiseCanceling noiseCancelingMode=Transport \
+  "$root/soundcore-set" "$mac" ambientSoundMode=Transparency transparencyMode=TalkMode \
+    windNoiseSuppression=false manualNoiseCanceling=3 \
     volumeAdjustments=10,-20,0,0,0,0,0,5 presetEqualizerProfile= >/dev/null || return 1
   [ "$(device_calls)" = 1 ] &&
-    [ "$(value ambientSoundMode)" = NoiseCanceling ] &&
-    [ "$(value noiseCancelingMode)" = Transport ] &&
+    [ "$(value ambientSoundMode)" = Transparency ] &&
+    [ "$(value transparencyMode)" = TalkMode ] &&
+    [ "$(value windNoiseSuppression)" = false ] &&
+    [ "$(value manualNoiseCanceling)" = 3 ] &&
     [ "$(value volumeAdjustments)" = "10,-20,0,0,0,0,0,5" ] &&
     [ "$(value presetEqualizerProfile)" = null ]
+}
+
+t_set_reads_back_after_writing() {
+  setup
+  local out
+  out=$("$root/soundcore-set" "$mac" --get presetEqualizerProfile --get windNoiseSuppression \
+    presetEqualizerProfile=Piano windNoiseSuppression=false) || return 1
+  [ "$(device_calls)" = 1 ] &&
+    [ "$out" = '{"presetEqualizerProfile":"Piano","windNoiseSuppression":false}' ]
+}
+
+t_set_without_read_back_prints_empty_object() {
+  setup
+  [ "$("$root/soundcore-set" "$mac" ambientSoundMode=Normal)" = '{}' ]
+}
+
+t_set_saves_selects_and_deletes_profiles() {
+  setup
+  "$root/soundcore-set" "$mac" 'customEqualizerProfile=+-Work' >/dev/null || return 1
+  jq -e '.[1].settings[1].setting.options == ["-Work"]' "$state/schema.json" >/dev/null || return 1
+  # The \ prefix selects a profile even when its name starts with + or -.
+  "$root/soundcore-set" "$mac" 'customEqualizerProfile=\-Work' >/dev/null || return 1
+  [ "$(value customEqualizerProfile)" = -Work ] || return 1
+  "$root/soundcore-set" "$mac" 'customEqualizerProfile=--Work' >/dev/null || return 1
+  [ "$(value customEqualizerProfile)" = null ] &&
+    jq -e '.[1].settings[1].setting.options == []' "$state/schema.json" >/dev/null
 }
 
 t_set_reports_errors() {
@@ -146,9 +177,11 @@ t_set_gives_up_waiting_for_the_lock() {
 
 t_set_usage() {
   setup
-  local rc=0
-  "$root/soundcore-set" "$mac" >/dev/null 2>&1 || rc=$?
-  [ "$rc" = 2 ]
+  local rc1=0 rc2=0 rc3=0
+  "$root/soundcore-set" "$mac" >/dev/null 2>&1 || rc1=$?
+  "$root/soundcore-set" "$mac" --get ambientSoundMode >/dev/null 2>&1 || rc2=$?
+  "$root/soundcore-set" "$mac" ambientSoundMode=Normal --get >/dev/null 2>&1 || rc3=$?
+  [ "$rc1" = 2 ] && [ "$rc2" = 2 ] && [ "$rc3" = 2 ] && [ "$(device_calls)" = 0 ]
 }
 
 check "no connected device reports disconnected" t_no_device
@@ -159,6 +192,9 @@ check "set waits for an in-flight status read instead of failing" t_set_during_s
 check "status waits for an in-flight set and sees its result" t_status_during_set
 check "--quick does not wait on the device lock" t_quick_status_does_not_wait_for_lock
 check "set applies several settings over one connection" t_set_applies_several_settings_in_one_connection
+check "set reads settings back over the same connection" t_set_reads_back_after_writing
+check "set without --get prints an empty object" t_set_without_read_back_prints_empty_object
+check "set saves, selects and deletes custom EQ profiles" t_set_saves_selects_and_deletes_profiles
 check "set exits non-zero with the reason on stderr" t_set_reports_errors
 check "set gives up on a hung device" t_set_times_out_on_a_hung_device
 check "set gives up waiting for a stuck lock holder" t_set_gives_up_waiting_for_the_lock

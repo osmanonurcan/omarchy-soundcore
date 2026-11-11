@@ -47,11 +47,18 @@ Click the headphone icon in the bar. The panel shows whichever
 OpenSCQ30-paired device is currently connected over Bluetooth:
 
 - **Sound mode** — Normal / Transparency / Noise Canceling (options vary by
-  model)
-- **Noise Canceling** — sub-mode buttons, shown only while ANC is active
+  model), with the settings that belong to the active mode under it: the
+  noise canceling or transparency mode, their strength when set to Manual,
+  and wind noise reduction, as your model offers them
 - **Equalizer preset** — dropdown of the device's built-in presets
+- **My EQ profiles** — save the current EQ under a name, switch between saved
+  profiles, and delete them (OpenSCQ30 keeps these on your computer)
 - **Custom EQ** — live sliders per band; dragging one applies immediately
   and clears the active preset
+
+Any other sound mode or equalizer setting OpenSCQ30 exposes for your model
+shows up too, as buttons, a dropdown, a switch or a slider depending on its
+type.
 
 If no supported device is connected, or your specific model doesn't expose
 sound mode/EQ settings in OpenSCQ30, the panel says so plainly instead of

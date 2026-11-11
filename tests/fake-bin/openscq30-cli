@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Stand-in for openscq30-cli used by tests/scripts.test.sh. It mimics the parts
 # the plugin relies on: the JSON shapes of `paired-devices list`,
-# `list-settings` and `setting --get`, exit status 1 with "Error: ..." on
-# stderr, and -- the reason it exists -- openscq30's rule that only one
-# connection to a device can be open at a time.
+# `list-settings` and `setting --get`, how `--set` values are parsed per
+# setting type (including saving/deleting custom EQ profiles with +name and
+# -name, and the \ escape for selecting one), commands running in the order
+# given, exit status 1 with "Error: ..." on stderr, and -- the reason it
+# exists -- openscq30's rule that only one connection to a device can be open
+# at a time.
 #
 # State lives in $FAKE_SCQ_STATE: schema.json, values.json, calls.log, and
 # fail-next (when present, the next device call fails with its contents).
@@ -14,7 +17,7 @@ echo "$*" >>"$state/calls.log"
 
 case "${1:-}" in
   paired-devices)
-    echo '[{"macAddress":"AA:BB:CC:DD:EE:FF","model":"SoundcoreA3040"}]'
+    echo '[{"macAddress":"AA:BB:CC:DD:EE:FF","model":"SoundcoreA3040","isDemo":false}]'
     exit 0
     ;;
   device) ;;
@@ -42,30 +45,63 @@ if [ -f "$state/fail-next" ]; then
   exit 1
 fi
 
+apply_set() {
+  local key=${1%%=*} raw=${1#*=}
+  jq --arg k "$key" --arg v "$raw" --slurpfile schema "$state/schema.json" '
+    ($schema[0] | [.[].settings[]] | map(select(.settingId == $k)) | first) as $s
+    | if $s == null then error("\($k) is not a setting of this device")
+      elif $s.type == "equalizer" then .[$k] = ($v | split(",") | map(tonumber))
+      elif $s.type == "toggle" then .[$k] = ($v | if . == "true" then true elif . == "false" then false
+                                                  else error("provided string was not `true` or `false`") end)
+      elif $s.type == "i32Range" then .[$k] = ($v | tonumber)
+      elif $s.type == "optionalSelect" and $v == "" then .[$k] = null
+      elif $s.type == "modifiableSelect" and ($v | startswith("+")) then .
+      elif $s.type == "modifiableSelect" and ($v | startswith("-")) then
+        if .[$k] == $v[1:] then .[$k] = null else . end
+      else ($v | ltrimstr("\\")) as $name
+        | if ($s.setting.options | index($name)) == null
+          then error("\($k): \($name) is not a valid option")
+          else .[$k] = $name end
+      end
+  ' "$state/values.json" >"$state/values.json.tmp" 2>"$state/jq.err" || {
+    sed 's/^jq: error[^:]*: /Error: /' "$state/jq.err" >&2
+    return 1
+  }
+  mv "$state/values.json.tmp" "$state/values.json"
+
+  # Saving or deleting a custom profile changes the options openscq30 lists.
+  case "$raw" in
+    +*|-*)
+      jq --arg k "$key" --arg name "${raw:1}" --arg op "${raw:0:1}" '
+        map(.settings |= map(if .settingId == $k and .type == "modifiableSelect"
+          then .setting.options = (if $op == "+" then (.setting.options - [$name]) + [$name]
+                                   else .setting.options - [$name] end)
+               | .setting.localizedOptions = .setting.options
+          else . end))
+      ' "$state/schema.json" >"$state/schema.json.tmp" && mv "$state/schema.json.tmp" "$state/schema.json"
+      ;;
+  esac
+}
+
 case "$sub" in
   list-settings)
     cat "$state/schema.json"
     ;;
   setting)
     gets=()
+    json=false
     while [ $# -gt 0 ]; do
       case "$1" in
         --get) gets+=("$2"); shift 2 ;;
-        --set)
-          key=${2%%=*} value=${2#*=}
-          jq --arg k "$key" --arg v "$value" '
-            .[$k] = (if $k == "volumeAdjustments" then ($v | split(",") | map(tonumber))
-                     elif $v == "" then null else $v end)
-          ' "$state/values.json" >"$state/values.json.tmp" && mv "$state/values.json.tmp" "$state/values.json"
-          shift 2
-          ;;
+        --set) apply_set "$2" || exit 1; shift 2 ;;
+        --json) json=true; shift ;;
         *) shift ;;
       esac
     done
-    if [ "${#gets[@]}" -gt 0 ]; then
+    if $json; then
       jq --args '. as $v | [$ARGS.positional[] | {settingId: ., value: {type: "x", value: $v[.]}}]' \
         "${gets[@]}" <"$state/values.json"
-    else
+    elif [ "${#gets[@]}" -eq 0 ]; then
       echo OK
     fi
     ;;

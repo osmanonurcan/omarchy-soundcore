@@ -6,16 +6,66 @@
         "settingId": "ambientSoundMode",
         "type": "select",
         "setting": {
-          "options": ["NoiseCanceling", "Transparency", "Normal"],
-          "localizedOptions": ["Noise Canceling", "Transparency", "Normal"]
+          "options": [
+            "NoiseCanceling",
+            "Transparency",
+            "Normal"
+          ],
+          "localizedOptions": [
+            "Noise Canceling",
+            "Transparency",
+            "Normal"
+          ]
+        }
+      },
+      {
+        "settingId": "transparencyMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "TalkMode",
+            "Manual"
+          ],
+          "localizedOptions": [
+            "Talk Mode",
+            "Manual"
+          ]
         }
       },
       {
         "settingId": "noiseCancelingMode",
         "type": "select",
         "setting": {
-          "options": ["Transport", "Outdoor", "Indoor"],
-          "localizedOptions": ["Transport", "Outdoor", "Indoor"]
+          "options": [
+            "Manual",
+            "Adaptive"
+          ],
+          "localizedOptions": [
+            "Manual",
+            "Adaptive"
+          ]
+        }
+      },
+      {
+        "settingId": "manualNoiseCanceling",
+        "type": "i32Range",
+        "setting": {
+          "start": 1,
+          "end": 5,
+          "step": 1
+        }
+      },
+      {
+        "settingId": "windNoiseSuppression",
+        "type": "toggle"
+      },
+      {
+        "settingId": "manualTransparency",
+        "type": "i32Range",
+        "setting": {
+          "start": 1,
+          "end": 5,
+          "step": 1
         }
       }
     ]
@@ -27,27 +77,119 @@
         "settingId": "presetEqualizerProfile",
         "type": "optionalSelect",
         "setting": {
-          "options": ["SoundcoreSignature", "Acoustic"],
-          "localizedOptions": ["Soundcore Signature", "Acoustic"]
+          "options": [
+            "SoundcoreSignature",
+            "Acoustic",
+            "BassReducer",
+            "Classical",
+            "Podcast",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "HipHop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "SmallSpeakers",
+            "SpokenWord",
+            "TrebleBooster",
+            "TrebleReducer"
+          ],
+          "localizedOptions": [
+            "Soundcore Signature",
+            "Acoustic",
+            "Bass Reducer",
+            "Classical",
+            "Podcast",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "Hip Hop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "Small Speakers",
+            "Spoken Word",
+            "Treble Booster",
+            "Treble Reducer"
+          ]
+        }
+      },
+      {
+        "settingId": "customEqualizerProfile",
+        "type": "modifiableSelect",
+        "setting": {
+          "options": [],
+          "localizedOptions": []
         }
       },
       {
         "settingId": "volumeAdjustments",
         "type": "equalizer",
         "setting": {
-          "bandHz": [100, 200, 400, 800, 1600, 3200, 6400, 12800],
+          "bandHz": [
+            100,
+            200,
+            400,
+            800,
+            1600,
+            3200,
+            6400,
+            12800
+          ],
           "fractionDigits": 1,
           "min": -120,
-          "max": 135
+          "max": 134
         }
+      }
+    ]
+  },
+  {
+    "categoryId": "equalizerImportExport",
+    "settings": [
+      {
+        "settingId": "importCustomEqualizerProfiles",
+        "type": "importString"
+      },
+      {
+        "settingId": "exportCustomEqualizerProfiles",
+        "type": "multiSelect",
+        "setting": {
+          "options": [],
+          "localizedOptions": []
+        }
+      },
+      {
+        "settingId": "exportCustomEqualizerProfilesOutput",
+        "type": "information"
       }
     ]
   },
   {
     "categoryId": "deviceInformation",
     "settings": [
-      { "settingId": "batteryLevel", "type": "information" },
-      { "settingId": "firmwareVersion", "type": "information" }
+      {
+        "settingId": "batteryLevel",
+        "type": "information"
+      },
+      {
+        "settingId": "serialNumber",
+        "type": "information"
+      },
+      {
+        "settingId": "firmwareVersion",
+        "type": "information"
+      }
     ]
   }
 ]

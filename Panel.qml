@@ -18,12 +18,27 @@ Panel {
   property var draggingFlags: [false, false, false, false, false, false, false, false]
   readonly property bool anyDragging: draggingFlags.indexOf(true) !== -1
 
-  // Writes not yet confirmed by a status read, by setting id. Queued ones
-  // wait for the in-flight soundcore-set to finish, then go out together.
-  property var queuedWrites: ({})
-  property var inflightWrites: ({})
+  // Writes not yet confirmed by the device, in the order they're sent.
+  // Queued ones wait for the in-flight soundcore-set to finish, then go out
+  // together in one call.
+  property var queuedWrites: []
+  property var inflightWrites: []
   property string writeError: ""
   property bool refreshQueued: false
+
+  // The bands each preset and saved profile sets, as the device reported
+  // them, so picking one again moves the sliders without waiting.
+  property var knownBands: ({})
+  property string knownBandsModel: ""
+
+  // Settings drawn as rows. Reassigned only when the rows change, so a status
+  // update doesn't rebuild them under the pointer.
+  property var soundRowIds: []
+  property var eqRowIds: []
+  property int openPopups: 0
+
+  property bool namingProfile: false
+  property bool deleteArmed: false
 
   readonly property bool connected: !!status.connected
   readonly property bool detailed: !!status.detailed
@@ -36,35 +51,16 @@ Panel {
   readonly property string deviceName: status.name || "Soundcore"
   readonly property string batteryText: Model.batteryText(values)
 
-  function categorySettings(catId) {
-    for (var i = 0; i < schemaList.length; i++)
-      if (schemaList[i].categoryId === catId) return schemaList[i].settings || []
-    return []
-  }
+  readonly property var eqSetting: Model.findSetting(schemaList, "volumeAdjustments")
+  readonly property var customSetting: Model.findSetting(schemaList, "customEqualizerProfile")
+  readonly property string customValue: values.customEqualizerProfile || ""
+  readonly property var profileOptions: Model.profileOptions(customSetting, customValue)
 
-  function findSetting(catId, settingId) {
-    var list = categorySettings(catId)
-    for (var i = 0; i < list.length; i++)
-      if (list[i].settingId === settingId) return list[i]
-    return null
-  }
-
-  readonly property var ambientSetting: findSetting("soundModes", "ambientSoundMode")
-  readonly property var ancSetting: findSetting("soundModes", "noiseCancelingMode")
-  readonly property var presetSetting: findSetting("equalizer", "presetEqualizerProfile")
-  readonly property var eqSetting: findSetting("equalizer", "volumeAdjustments")
-
-  readonly property string ambientValue: values.ambientSoundMode || ""
-  readonly property string ancValue: values.noiseCancelingMode || ""
-  readonly property string presetValue: values.presetEqualizerProfile || ""
-
-  readonly property bool hasSoundModes: !!ambientSetting
-  readonly property bool hasEqualizer: !!eqSetting
+  readonly property bool hasSoundModes: soundRowIds.length > 0
+  readonly property bool hasEqualizer: eqRowIds.length > 0 || !!customSetting || !!eqSetting
   readonly property bool hasControls: hasSoundModes || hasEqualizer
 
-  function ambientOptions() { return Model.buildOptions(ambientSetting) }
-  function ancOptions() { return Model.buildOptions(ancSetting) }
-  function presetOptions() { return Model.presetOptions(presetSetting, presetValue) }
+  function settingFor(id) { return Model.findSetting(schemaList, id) }
 
   function refresh() {
     if (statusProc.running) {
@@ -83,43 +79,126 @@ Panel {
   }
 
   function updateStatus(raw) {
-    var next = Model.mergeStatus(root.status, Model.parseStatus(raw))
+    var parsed = Model.parseStatus(raw)
+    if (parsed.detailed && !parsed.error) learnBands(parsed.model, parsed.values)
+    var next = Model.mergeStatus(root.status, parsed)
     root.status = Model.withPendingWrites(next, root.inflightWrites, root.queuedWrites)
+    syncBands()
+  }
+
+  // Only from values the device reported, never from what the panel shows
+  // ahead of it.
+  function learnBands(model, values) {
+    if (model !== root.knownBandsModel) {
+      root.knownBands = ({})
+      root.knownBandsModel = model || ""
+    }
+    root.knownBands = Model.learnBands(root.knownBands, values)
+  }
+
+  function syncBands() {
     var bands = root.status.values ? root.status.values.volumeAdjustments : null
     if (Array.isArray(bands) && !root.anyDragging) root.pendingBands = bands.slice()
   }
+
+  function syncRows() {
+    // Read from `status` itself: the bindings derived from it may not have
+    // caught up yet when this runs.
+    var schema = root.status.schema || []
+    var values = root.status.values || {}
+    var sound = Model.rowIds(schema, "soundModes", values)
+    if (sound.join("\n") !== root.soundRowIds.join("\n")) root.soundRowIds = sound
+    var eq = Model.rowIds(schema, "equalizer", values, ["customEqualizerProfile", "volumeAdjustments"])
+    if (eq.join("\n") !== root.eqRowIds.join("\n")) root.eqRowIds = eq
+  }
+
+  onStatusChanged: syncRows()
 
   // Shows the change right away, then writes it once nothing else is being
   // written, so quick successive changes coalesce instead of being dropped.
   function setSetting(id, value) {
     if (!root.connected || !root.status.mac) return
-    if (Model.sameValue(root.values[id], value)) return
-    var queued = Object.assign({}, root.queuedWrites)
-    queued[id] = value
-    root.queuedWrites = queued
+    var setting = settingFor(id)
+    if (!setting || Model.sameValue(root.values[id], value)) return
+    enqueue(Model.writeEntry(setting, value, root.knownBands))
+  }
+
+  function enqueue(entry) {
+    root.queuedWrites = Model.queueWrite(root.queuedWrites, entry)
     root.status = Model.withPendingWrites(root.status, root.inflightWrites, root.queuedWrites)
+    syncBands()
     flushWrites()
   }
 
   function flushWrites() {
-    if (setProc.running) return
-    var args = Model.setArgs(root.queuedWrites)
-    if (args.length === 0) return
+    if (setProc.running || root.queuedWrites.length === 0) return
     if (!root.status.mac) {
-      root.queuedWrites = ({})
+      root.queuedWrites = []
       return
     }
     root.inflightWrites = root.queuedWrites
-    root.queuedWrites = ({})
-    setProc.command = [root.setScript, root.status.mac].concat(args)
+    root.queuedWrites = []
+    // Read every setting back over the same connection: a write can change
+    // others, like a preset changing the bands.
+    setProc.command = [root.setScript, root.status.mac]
+      .concat(Model.getArgs(Model.readableIds(root.schemaList)))
+      .concat(Model.setArgs(root.inflightWrites))
     setProc.running = true
   }
 
   function finishWrite(exitCode, exitStatus) {
-    root.writeError = exitCode === 0 && exitStatus === 0 ? "" : Model.errorMessage(setErr.text, exitCode)
-    root.inflightWrites = ({})
-    if (Model.setArgs(root.queuedWrites).length > 0) root.flushWrites()
-    else root.refreshSoon()
+    var ok = exitCode === 0 && exitStatus === 0
+    var sent = root.inflightWrites
+    var readBack = ok ? Model.parseValues(setOut.text) : null
+    root.inflightWrites = []
+    root.writeError = ok ? "" : Model.errorMessage(setErr.text, exitCode)
+    if (readBack) {
+      learnBands(root.status.model, readBack)
+      root.status = Model.withPendingWrites(Model.withValues(root.status, readBack), [], root.queuedWrites)
+      syncBands()
+    }
+    if (root.queuedWrites.length > 0) flushWrites()
+    // A failed write leaves the panel showing what was asked for, and saving
+    // or deleting a profile changes the list; read the device again for both.
+    else if (!readBack || Object.keys(readBack).length === 0 || Model.hasCommand(sent)) refreshSoon()
+  }
+
+  function startNaming() {
+    root.deleteArmed = false
+    root.namingProfile = true
+    profileName.text = ""
+    profileName.forceActiveFocus()
+  }
+
+  function stopNaming() {
+    root.namingProfile = false
+    keyCatcher.forceActiveFocus()
+  }
+
+  function saveProfile(text) {
+    var name = Model.cleanProfileName(text)
+    if (name === "" || !root.connected) return
+    stopNaming()
+    root.status = Model.withProfileChange(root.status, name, false)
+    enqueue(Model.profileCommand(name, false, root.values))
+  }
+
+  // Deleting takes a second click, since a saved profile can't be recovered.
+  function deleteProfile() {
+    var name = root.customValue
+    if (name === "" || !root.connected) return
+    if (!root.deleteArmed) {
+      root.deleteArmed = true
+      disarmTimer.restart()
+      return
+    }
+    root.deleteArmed = false
+    root.status = Model.withProfileChange(root.status, name, true)
+    enqueue(Model.profileCommand(name, true, root.values))
+  }
+
+  function notePopup(open) {
+    root.openPopups = Math.max(0, root.openPopups + (open ? 1 : -1))
   }
 
   function setDragging(index, dragging) {
@@ -143,6 +222,8 @@ Panel {
   }
 
   onOpenedChanged: {
+    root.namingProfile = false
+    root.deleteArmed = false
     if (!opened) return
     root.writeError = ""
     refresh()
@@ -165,6 +246,7 @@ Panel {
 
   Process {
     id: setProc
+    stdout: StdioCollector { id: setOut; waitForEnd: true }
     stderr: StdioCollector { id: setErr; waitForEnd: true }
     onExited: function(exitCode, exitStatus) { root.finishWrite(exitCode, exitStatus) }
   }
@@ -176,6 +258,13 @@ Panel {
     onTriggered: root.refresh()
   }
 
+  Timer {
+    id: disarmTimer
+    interval: 4000
+    repeat: false
+    onTriggered: root.deleteArmed = false
+  }
+
   // Paused while a slider is held so a status read can't hold the device
   // when the drag's value is written.
   Timer {
@@ -183,6 +272,23 @@ Panel {
     running: !root.anyDragging
     repeat: true
     onTriggered: root.refresh()
+  }
+
+  Component {
+    id: settingRow
+
+    SettingControl {
+      id: row
+      required property string modelData
+      width: parent ? parent.width : 0
+      setting: root.settingFor(modelData)
+      value: root.values[modelData]
+      label: Model.label(modelData)
+      bar: root.bar
+      onEdited: function(v) { root.setSetting(row.modelData, v) }
+      onPopupOpenChanged: root.notePopup(popupOpen)
+      Component.onDestruction: if (popupOpen) root.notePopup(false)
+    }
   }
 
   BarIconButton {
@@ -208,6 +314,8 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      // Let an open dropdown or the profile name field have the keys.
+      blocked: root.openPopups > 0 || profileDropdown.popupOpen || profileName.activeFocus
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
@@ -295,43 +403,11 @@ Panel {
           Column {
             visible: root.connected && root.hasSoundModes
             width: parent.width
-            spacing: Style.space(8)
+            spacing: Style.space(12)
 
-            PanelSectionHeader {
-              text: "SOUND MODE"
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-            }
-
-            ButtonGroup {
-              width: parent.width
-              options: root.ambientOptions()
-              value: root.ambientValue
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-              onChanged: function(v) { root.setSetting("ambientSoundMode", v) }
-            }
-
-            Column {
-              visible: !!root.ancSetting && root.ambientValue === "NoiseCanceling"
-              width: parent.width
-              spacing: Style.space(6)
-              topPadding: Style.space(6)
-
-              PanelSectionHeader {
-                text: "NOISE CANCELING"
-                foreground: root.bar.foreground
-                fontFamily: root.bar.fontFamily
-              }
-
-              ButtonGroup {
-                width: parent.width
-                options: root.ancOptions()
-                value: root.ancValue
-                foreground: root.bar.foreground
-                fontFamily: root.bar.fontFamily
-                onChanged: function(v) { root.setSetting("noiseCancelingMode", v) }
-              }
+            Repeater {
+              model: root.soundRowIds
+              delegate: settingRow
             }
           }
 
@@ -344,86 +420,163 @@ Panel {
           Column {
             visible: root.connected && root.hasEqualizer
             width: parent.width
-            spacing: Style.space(10)
-
-            PanelSectionHeader {
-              text: "EQUALIZER PRESET"
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-            }
-
-            Dropdown {
-              id: presetDropdown
-              width: parent.width
-              showLabel: false
-              options: root.presetOptions()
-              value: root.presetValue
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-              onChanged: function(v) {
-                root.setSetting("presetEqualizerProfile", v)
-                // Dropdown assigns its own `value` when an option is picked,
-                // which would otherwise break the binding above for good.
-                presetDropdown.value = Qt.binding(function() { return root.presetValue })
-              }
-            }
-
-            PanelSectionHeader {
-              text: "CUSTOM EQ"
-              foreground: root.bar.foreground
-              fontFamily: root.bar.fontFamily
-              topPadding: Style.space(6)
-            }
+            spacing: Style.space(12)
 
             Repeater {
-              model: root.eqSetting ? root.eqSetting.setting.bandHz.length : 0
+              model: root.eqRowIds
+              delegate: settingRow
+            }
 
-              Column {
-                id: bandRow
-                required property int index
-                width: panelColumn.width
-                spacing: Style.space(2)
+            Column {
+              visible: !!root.customSetting
+              width: parent.width
+              spacing: Style.space(6)
 
-                readonly property real fd: root.eqSetting.setting.fractionDigits
-                readonly property real scale: Math.pow(10, fd)
-                readonly property real rawValue: root.bandValue(index)
+              PanelSectionHeader {
+                text: "MY EQ PROFILES"
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+              }
 
-                Row {
-                  width: parent.width
+              Dropdown {
+                id: profileDropdown
+                visible: root.profileOptions.length > 0 && !root.namingProfile
+                width: parent.width
+                showLabel: false
+                options: root.profileOptions
+                value: root.customValue
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+                onChanged: function(v) {
+                  if (v !== "") root.setSetting("customEqualizerProfile", v)
+                  // Dropdown assigns its own `value` when an option is picked,
+                  // which would otherwise break the binding above for good.
+                  profileDropdown.value = Qt.binding(function() { return root.customValue })
+                }
+              }
 
-                  Text {
-                    textFormat: Text.PlainText
-                    text: Model.formatBandLabel(root.eqSetting.setting.bandHz[bandRow.index])
-                    color: root.bar.foreground
-                    font.family: root.bar.fontFamily
-                    font.pixelSize: Style.font.caption
-                    width: parent.width - dbLabel.implicitWidth
-                  }
+              Row {
+                visible: !root.namingProfile
+                spacing: Style.space(8)
 
-                  Text {
-                    id: dbLabel
-                    textFormat: Text.PlainText
-                    text: (bandRow.rawValue / bandRow.scale).toFixed(bandRow.fd) + " dB"
-                    color: Qt.darker(root.bar.foreground, 1.3)
-                    font.family: root.bar.fontFamily
-                    font.pixelSize: Style.font.caption
+                Button {
+                  text: "Save current EQ…"
+                  bordered: true
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  onClicked: root.startNaming()
+                }
+
+                Button {
+                  visible: root.customValue !== ""
+                  text: root.deleteArmed ? "Delete “" + root.customValue + "”?" : "Delete"
+                  bordered: true
+                  foreground: root.deleteArmed ? root.bar.urgent : root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  onClicked: root.deleteProfile()
+                }
+              }
+
+              Row {
+                visible: root.namingProfile
+                width: parent.width
+                spacing: Style.space(8)
+
+                TextField {
+                  id: profileName
+                  width: parent.width - saveButton.width - cancelButton.width - 2 * parent.spacing
+                  placeholderText: "Profile name"
+                  maximumLength: 64
+                  foreground: root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  onAccepted: root.saveProfile(text)
+                  Keys.onEscapePressed: function(event) {
+                    root.stopNaming()
+                    event.accepted = true
                   }
                 }
 
-                PanelSlider {
-                  bar: root.bar
-                  width: parent.width
-                  minimum: root.eqSetting.setting.min
-                  maximum: root.eqSetting.setting.max
-                  step: 1
-                  integer: true
-                  value: bandRow.rawValue
+                Button {
+                  id: saveButton
+                  text: "Save"
+                  bordered: true
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  onClicked: root.saveProfile(profileName.text)
+                }
 
-                  onMoved: function(v) { root.moveBand(bandRow.index, v) }
-                  onDraggingChanged: root.setDragging(bandRow.index, dragging)
-                  onReleased: function(v) {
-                    root.moveBand(bandRow.index, v)
-                    root.commitBands()
+                Button {
+                  id: cancelButton
+                  text: "Cancel"
+                  bordered: true
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                  onClicked: root.stopNaming()
+                }
+              }
+            }
+
+            Column {
+              visible: !!root.eqSetting
+              width: parent.width
+              spacing: Style.space(10)
+
+              PanelSectionHeader {
+                text: "CUSTOM EQ"
+                foreground: root.bar.foreground
+                fontFamily: root.bar.fontFamily
+              }
+
+              Repeater {
+                model: root.eqSetting ? root.eqSetting.setting.bandHz.length : 0
+
+                Column {
+                  id: bandRow
+                  required property int index
+                  width: panelColumn.width
+                  spacing: Style.space(2)
+
+                  readonly property real fd: root.eqSetting.setting.fractionDigits
+                  readonly property real stepsPerDb: Math.pow(10, fd)
+                  readonly property real rawValue: root.bandValue(index)
+
+                  Row {
+                    width: parent.width
+
+                    Text {
+                      textFormat: Text.PlainText
+                      text: Model.formatBandLabel(root.eqSetting.setting.bandHz[bandRow.index])
+                      color: root.bar.foreground
+                      font.family: root.bar.fontFamily
+                      font.pixelSize: Style.font.caption
+                      width: parent.width - dbLabel.implicitWidth
+                    }
+
+                    Text {
+                      id: dbLabel
+                      textFormat: Text.PlainText
+                      text: (bandRow.rawValue / bandRow.stepsPerDb).toFixed(bandRow.fd) + " dB"
+                      color: Qt.darker(root.bar.foreground, 1.3)
+                      font.family: root.bar.fontFamily
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+
+                  PanelSlider {
+                    bar: root.bar
+                    width: parent.width
+                    minimum: root.eqSetting.setting.min
+                    maximum: root.eqSetting.setting.max
+                    step: 1
+                    integer: true
+                    value: bandRow.rawValue
+
+                    onMoved: function(v) { root.moveBand(bandRow.index, v) }
+                    onDraggingChanged: root.setDragging(bandRow.index, dragging)
+                    onReleased: function(v) {
+                      root.moveBand(bandRow.index, v)
+                      root.commitBands()
+                    }
                   }
                 }
               }

@@ -1,8 +1,14 @@
 {
-  "ambientSoundMode": "Normal",
-  "noiseCancelingMode": "Indoor",
-  "presetEqualizerProfile": "Acoustic",
-  "volumeAdjustments": [0, 0, 0, 0, 0, 0, 0, 0],
+  "ambientSoundMode": "NoiseCanceling",
+  "transparencyMode": "Manual",
+  "noiseCancelingMode": "Adaptive",
+  "manualNoiseCanceling": 5,
+  "windNoiseSuppression": true,
+  "manualTransparency": 5,
+  "presetEqualizerProfile": "Lounge",
+  "customEqualizerProfile": null,
+  "volumeAdjustments": [-10, 20, 40, 30, 0, -20, 20, 10],
   "batteryLevel": "4/5",
+  "serialNumber": "TEST000000000000",
   "firmwareVersion": "02.61"
 }

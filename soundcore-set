@@ -1,22 +1,38 @@
 #!/usr/bin/env bash
-# Usage: soundcore-set <mac-address> <settingId=value> [<settingId=value> ...]
+# Usage: soundcore-set <mac-address> [--get <settingId>]... <settingId=value>...
 #
-# Applies the settings in order over a single connection. On failure, exits
-# non-zero with the reason on stderr.
+# Applies the settings in order over a single connection, then reads back the
+# --get settings over that same connection and prints them as a JSON object
+# of settingId to value ({} without --get). On failure, exits non-zero with
+# the reason on stderr.
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-  echo "usage: soundcore-set <mac-address> <settingId=value> [<settingId=value> ...]" >&2
+usage() {
+  echo "usage: soundcore-set <mac-address> [--get <settingId>]... <settingId=value>..." >&2
   exit 2
-fi
+}
 
+[ "$#" -ge 2 ] || usage
 mac="$1"
 shift
 
-args=()
-for kv in "$@"; do
-  args+=(--set "$kv")
+sets=()
+gets=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --get)
+      [ "$#" -ge 2 ] || usage
+      gets+=(--get "$2")
+      shift 2
+      ;;
+    *=*)
+      sets+=(--set "$1")
+      shift
+      ;;
+    *) usage ;;
+  esac
 done
+[ "${#sets[@]}" -gt 0 ] || usage
 
 call_timeout=${SOUNDCORE_CALL_TIMEOUT:-15}
 lock_timeout=${SOUNDCORE_LOCK_TIMEOUT:-40}
@@ -28,9 +44,15 @@ if ! flock -w "$lock_timeout" 9; then
   exit 1
 fi
 
+# openscq30-cli runs --set and --get in the order given, so the gets see the
+# result of the sets.
 rc=0
-timeout "$call_timeout" openscq30-cli device --mac-address "$mac" setting "${args[@]}" || rc=$?
+out=$(timeout "$call_timeout" openscq30-cli device --mac-address "$mac" setting "${sets[@]}" "${gets[@]}" --json) || rc=$?
 if [ "$rc" -eq 124 ]; then
   echo "Error: timed out talking to the headphones" >&2
 fi
-exit "$rc"
+[ "$rc" -eq 0 ] || exit "$rc"
+
+# The settings were applied either way; an unreadable read-back just means
+# the caller has to read them again.
+jq -c '[.[] | {(.settingId): .value.value}] | add // {}' <<<"$out" 2>/dev/null || echo '{}'
