@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.osmanonurcan.soundcore",
   "name": "Soundcore",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "osmanonurcan",
   "description": "Control Soundcore headphone sound modes, ANC, equalizer, touch controls, and more",
   "kinds": [
