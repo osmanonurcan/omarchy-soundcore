@@ -7,8 +7,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "io.github.s-w-3.soundcore"
-  ipcTarget: "io.github.s-w-3.soundcore"
+  moduleName: "io.github.osmanonurcan.soundcore"
+  ipcTarget: "io.github.osmanonurcan.soundcore"
 
   readonly property string statusScript: Model.localPath(Qt.resolvedUrl("soundcore-status"))
   readonly property string setScript: Model.localPath(Qt.resolvedUrl("soundcore-set"))

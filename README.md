@@ -44,8 +44,16 @@ openscq30-cli paired-devices add \
 ## Install
 
 ```
-omarchy plugin add https://github.com/s-w-3/omarchy-plugin-soundcore.git --enable
-omarchy bar move io.github.s-w-3.soundcore --section right
+omarchy plugin add https://github.com/osmanonurcan/omarchy-soundcore.git --enable
+omarchy bar move io.github.osmanonurcan.soundcore --section right
+```
+
+If you have the original plugin this one started from
+(`io.github.s-w-3.soundcore`) installed, remove it so you don't get two
+widgets:
+
+```
+omarchy plugin remove io.github.s-w-3.soundcore
 ```
 
 ## Usage
@@ -101,6 +109,11 @@ headphones are required:
 node --test tests/
 tests/scripts.test.sh
 ```
+
+## Credits
+
+Started as a fork of
+[s-w-3/omarchy-plugin-soundcore](https://github.com/s-w-3/omarchy-plugin-soundcore).
 
 ## License
 
