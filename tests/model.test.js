@@ -19,6 +19,13 @@ test("parseStatus keeps the name of a connected device openscq30 doesn't recogni
   assert.deepEqual(Model.parseStatus('{"connected":false,"unrecognized":{"a":1}}'), { connected: false })
 })
 
+test("parseStatus keeps word that openscq30-cli isn't installed", () => {
+  const raw = '{"connected":false,"missing":"openscq30-cli"}'
+  assert.deepEqual(Model.parseStatus(raw), { connected: false, missing: "openscq30-cli" })
+  assert.deepEqual(Model.mergeStatus(detailed, Model.parseStatus(raw)), { connected: false, missing: "openscq30-cli" })
+  assert.deepEqual(Model.parseStatus('{"connected":false,"missing":"rm -rf"}'), { connected: false })
+})
+
 test("parseStatus treats unparseable output as disconnected", () => {
   assert.deepEqual(Model.parseStatus(""), { connected: false })
   assert.deepEqual(Model.parseStatus("not json"), { connected: false })

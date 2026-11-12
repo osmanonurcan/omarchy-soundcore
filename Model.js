@@ -68,18 +68,22 @@ function parseStatus(raw) {
   try {
     var parsed = JSON.parse(raw || "{}")
     if (!parsed || typeof parsed !== "object") return { connected: false }
-    if (!parsed.connected) return disconnected(parsed.unrecognized)
+    if (!parsed.connected) return disconnected(parsed)
     return parsed
   } catch (e) {
     return { connected: false }
   }
 }
 
-// Not connected, naming the Soundcore device that is if openscq30 doesn't
-// recognize it.
-function disconnected(unrecognized) {
-  if (typeof unrecognized !== "string" || unrecognized === "") return { connected: false }
-  return { connected: false, unrecognized: unrecognized.slice(0, 64) }
+// Not connected, saying so if openscq30-cli isn't installed, and naming the
+// Soundcore device that is connected if openscq30 doesn't recognize it.
+function disconnected(status) {
+  var result = { connected: false }
+  if (!status) return result
+  if (status.missing === "openscq30-cli") result.missing = status.missing
+  if (typeof status.unrecognized === "string" && status.unrecognized !== "")
+    result.unrecognized = status.unrecognized.slice(0, 64)
+  return result
 }
 
 // The values soundcore-set read back after writing, or null.
@@ -97,7 +101,7 @@ function parseValues(raw) {
 // already read from that same device are kept; a full read that failed keeps
 // them too, with the error attached, rather than collapsing the panel.
 function mergeStatus(prev, next) {
-  if (!next || !next.connected) return disconnected(next && next.unrecognized)
+  if (!next || !next.connected) return disconnected(next)
   var sameDevice = !!(prev && prev.connected && prev.detailed && prev.mac === next.mac)
   if (!sameDevice) return next
   if (!next.detailed) return prev

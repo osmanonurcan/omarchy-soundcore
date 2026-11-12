@@ -128,6 +128,16 @@ t_prefers_a_known_device_over_registering_another() {
   jq -e --arg mac "$mac" '.connected and .mac == $mac and (has("unrecognized") | not)' <<<"$out" >/dev/null
 }
 
+t_reports_missing_openscq30() {
+  setup
+  # A PATH with bash and the fake bluetoothctl, but no openscq30-cli.
+  local bin="$state/bin"
+  mkdir -p "$bin"
+  ln -s "$(command -v bash)" "$bin/bash"
+  ln -s "$root/tests/fake-bin/bluetoothctl" "$bin/bluetoothctl"
+  [ "$(PATH="$bin" "$root/soundcore-status" --quick)" = '{"connected":false,"missing":"openscq30-cli"}' ]
+}
+
 t_quick_status_does_not_connect() {
   setup
   local out
@@ -258,6 +268,7 @@ t_set_usage() {
 }
 
 check "no connected device reports disconnected" t_no_device
+check "a missing openscq30-cli is reported" t_reports_missing_openscq30
 check "full status reads schema, values and battery" t_full_status
 check "full status reads every category the panel shows" t_full_status_reads_every_category
 check "--quick finds the device without connecting to it" t_quick_status_does_not_connect

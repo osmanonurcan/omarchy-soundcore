@@ -54,6 +54,7 @@ Panel {
   readonly property var values: status.values || {}
   readonly property string deviceName: status.name || "Soundcore"
   readonly property string unrecognized: status.unrecognized || ""
+  readonly property bool missingCli: status.missing === "openscq30-cli"
   readonly property string batteryText: Model.batteryText(values)
 
   readonly property var eqSetting: Model.findSetting(schemaList, "volumeAdjustments")
@@ -117,6 +118,13 @@ Panel {
     if (eq.join("\n") !== root.eqRowIds.join("\n")) root.eqRowIds = eq
     var sections = Model.sections(schema, values)
     if (JSON.stringify(sections) !== JSON.stringify(root.sectionList)) root.sectionList = sections
+  }
+
+  // In a terminal, where the AUR helper can ask for the password. The next
+  // status read finds it once it's installed.
+  function installOpenscq30() {
+    root.bar.run("omarchy-launch-floating-terminal-with-presentation omarchy-pkg-aur-add openscq30-cli-bin")
+    root.close()
   }
 
   function toggleSection(id) {
@@ -311,6 +319,7 @@ Panel {
     text: "󰋋"
     dimmed: !root.connected
     tooltipText: root.connected ? root.deviceName
+      : root.missingCli ? "OpenSCQ30 isn't installed"
       : (root.unrecognized !== "" ? root.unrecognized + ": model not recognized by OpenSCQ30" : "No Soundcore headphones connected")
     onPressed: function(b) { root.toggle() }
   }
@@ -386,12 +395,23 @@ Panel {
             width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: root.unrecognized !== ""
+            text: root.missingCli
+              ? "This widget talks to your headphones through OpenSCQ30, which isn't installed."
+              : root.unrecognized !== ""
               ? "“" + root.unrecognized + "” is connected, but OpenSCQ30 doesn't recognize its model, so it can't be controlled here."
               : "Connect your Soundcore headphones over Bluetooth to control them here."
             color: Qt.darker(root.bar.foreground, 1.3)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
+          }
+
+          Button {
+            visible: !root.connected && root.missingCli
+            text: "Install OpenSCQ30"
+            bordered: true
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            onClicked: root.installOpenscq30()
           }
 
           Text {

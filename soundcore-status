@@ -10,8 +10,15 @@
 # A connected Soundcore device that openscq30 doesn't know yet is registered
 # with it (`openscq30-cli paired-devices add`) under the model its Bluetooth
 # name matches. One that matches no model, or more than one, is left alone
-# and reported as {"connected":false,"unrecognized":"<its name>"}.
+# and reported as {"connected":false,"unrecognized":"<its name>"}. Without
+# openscq30-cli, nothing can be done; that's {"connected":false,"missing":
+# "openscq30-cli"}.
 set -uo pipefail
+
+if ! command -v openscq30-cli >/dev/null 2>&1; then
+  echo '{"connected":false,"missing":"openscq30-cli"}'
+  exit 0
+fi
 
 quick=false
 [ "${1:-}" = "--quick" ] && quick=true
