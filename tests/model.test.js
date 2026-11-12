@@ -365,11 +365,85 @@ test("rangeText adds the unit a range is in", () => {
   assert.equal(Model.rangeText("manualNoiseCanceling", 3), "3")
 })
 
-test("batteryText names each earbud and the case, and marks one charging", () => {
-  assert.equal(Model.batteryText(libertyValues), "L 3/5 · R 2/5 · Case 3/5")
-  assert.equal(Model.batteryText({ batteryLevelLeft: "3/5", isChargingLeft: "Yes", batteryLevelRight: "2/5", isChargingRight: "No" }),
-    "L 3/5 (charging) · R 2/5")
-  assert.equal(Model.batteryText({ batteryLevel: "4/5", firmwareVersion: "02.61" }), "Battery 4/5")
-  assert.equal(Model.batteryText({ batteryLevel: "4/5", isCharging: true }), "Battery 4/5 (charging)")
-  assert.equal(Model.batteryText({}), "")
+test("batteries names each earbud and the case, as percentages with icons", () => {
+  assert.deepEqual(Model.batteries(libertyValues), [
+    { name: "Left", text: "60%", icon: "󰂀", low: false },
+    { name: "Right", text: "40%", icon: "󰁾", low: false },
+    { name: "Case", text: "60%", icon: "󰂀", low: false }
+  ])
+})
+
+test("batteries marks charging and low batteries", () => {
+  assert.deepEqual(Model.batteries({ batteryLevelLeft: "1/5", isChargingLeft: "Yes", batteryLevelRight: "1/5", isChargingRight: "No" }), [
+    { name: "Left", text: "20%", icon: "󰂇", low: false },
+    { name: "Right", text: "20%", icon: "󰁼", low: true }
+  ])
+})
+
+test("batteries reads every scale openscq30 reports in", () => {
+  assert.deepEqual(Model.batteries({ batteryLevel: "4/5", firmwareVersion: "02.61" }), [{ name: "", text: "80%", icon: "󰂂", low: false }])
+  assert.equal(Model.batteries({ batteryLevel: "7/10" })[0].text, "70%")
+  assert.equal(Model.batteries({ batteryLevel: "100/100", isCharging: true })[0].icon, "󰂅")
+  assert.deepEqual(Model.batteries({ batteryLevel: "unknown" }), [{ name: "", text: "unknown", icon: "󰂑", low: false }])
+  assert.deepEqual(Model.batteries({}), [])
+})
+
+test("batteryText sums the batteries up in a line", () => {
+  assert.equal(Model.batteryText(libertyValues), "Left 60% · Right 40% · Case 60%")
+  assert.equal(Model.batteryText({ batteryLevel: "4/5" }), "Battery 80%")
+})
+
+// ---- What other models do differently, from OpenSCQ30's demo devices ----
+const ncSettings = (modeOptions, extra) => [{ categoryId: "soundModes", settings: [
+  { settingId: "ambientSoundMode", type: "select", setting: { options: ["NoiseCanceling", "Transparency", "Normal"] } },
+  { settingId: "noiseCancelingMode", type: "select", setting: { options: modeOptions } }
+].concat(extra) }]
+
+test("rowIds shows the manual strength in a Custom noise canceling mode (Space One)", () => {
+  const schema = ncSettings(["Custom", "Adaptive"], [
+    { settingId: "manualNoiseCanceling", type: "i32Range", setting: { start: 1, end: 5, step: 1 } }])
+  assert.deepEqual(Model.rowIds(schema, "soundModes", { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Custom" }),
+    ["ambientSoundMode", "noiseCancelingMode", "manualNoiseCanceling"])
+  assert.deepEqual(Model.rowIds(schema, "soundModes", { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Adaptive" }),
+    ["ambientSoundMode", "noiseCancelingMode"])
+})
+
+test("rowIds ties each noise canceling mode's settings to that mode", () => {
+  const schema = ncSettings(["Manual", "Adaptive", "MultiScene", "Custom"], [
+    { settingId: "multiSceneNoiseCanceling", type: "select", setting: { options: ["Transport", "Outdoor", "Indoor"] } },
+    { settingId: "adaptiveNoiseCancelingSensitivityLevel", type: "i32Range", setting: { start: 0, end: 10, step: 1 } },
+    { settingId: "customNoiseCanceling", type: "i32Range", setting: { start: 0, end: 10, step: 1 } }])
+  const rows = (mode) => Model.rowIds(schema, "soundModes", { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: mode }).slice(2)
+  assert.deepEqual(rows("MultiScene"), ["multiSceneNoiseCanceling"])
+  assert.deepEqual(rows("Adaptive"), ["adaptiveNoiseCancelingSensitivityLevel"])
+  assert.deepEqual(rows("Custom"), ["customNoiseCanceling"])
+  assert.deepEqual(rows("Manual"), [])
+})
+
+test("rowIds keeps noise canceling extras out of the other sound modes", () => {
+  const schema = ncSettings(["Manual"], [
+    { settingId: "windNoiseDetected", type: "information" },
+    { settingId: "ancPersonalizedToEarCanal", type: "toggle" }])
+  assert.deepEqual(Model.rowIds(schema, "soundModes", { ambientSoundMode: "Normal" }), ["ambientSoundMode"])
+  assert.deepEqual(Model.rowIds(schema, "soundModes", { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Manual" }),
+    ["ambientSoundMode", "noiseCancelingMode", "windNoiseDetected", "ancPersonalizedToEarCanal"])
+})
+
+test("selectOptions offers no action for a slide gesture too", () => {
+  const slide = { settingId: "leftSlideUp", type: "optionalSelect", setting: { options: ["VolumeUp"], localizedOptions: ["Volume Up"] } }
+  assert.deepEqual(Model.selectOptions(slide, "VolumeUp")[0], { value: "", label: "No action" })
+})
+
+test("label spells known abbreviations and names right", () => {
+  assert.equal(Model.label("ldac"), "LDAC")
+  assert.equal(Model.label("ancPersonalizedToEarCanal"), "ANC personalized to ear canal")
+  assert.equal(Model.label("dolbyAudio"), "Dolby Audio")
+  assert.equal(Model.label("noiseCancelingModeInCycle"), "Noise canceling in button cycle")
+})
+
+test("eqReadOnly: without custom profiles, a model's EQ bands can't be changed", () => {
+  const eq = (ids) => [{ categoryId: "equalizer", settings: ids.map((id) => ({ settingId: id, type: id === "volumeAdjustments" ? "equalizer" : "select" })) }]
+  assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile", "volumeAdjustments"])), true)
+  assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile", "customEqualizerProfile", "volumeAdjustments"])), false)
+  assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile"])), false)
 })

@@ -20,6 +20,11 @@ var LABELS = {
   manualNoiseCanceling: "Noise canceling strength",
   adaptiveNoiseCanceling: "Adaptive level",
   transportationMode: "Transportation",
+  customNoiseCanceling: "Noise canceling strength",
+  multiSceneNoiseCanceling: "Scene",
+  adaptiveNoiseCancelingSensitivityLevel: "Adaptive sensitivity",
+  realTimeAdaptiveNoiseCanceling: "Real-time adaptive noise canceling",
+  ancPersonalizedToEarCanal: "ANC personalized to ear canal",
   windNoiseSuppression: "Wind noise reduction",
   transparencyMode: "Transparency",
   manualTransparency: "Transparency level",
@@ -34,7 +39,13 @@ var LABELS = {
   firmwareVersionLeft: "Firmware (left)",
   firmwareVersionRight: "Firmware (right)",
   twsStatus: "Earbud link",
-  hostDevice: "Primary earbud"
+  hostDevice: "Primary earbud",
+  ldac: "LDAC",
+  dolbyAudio: "Dolby Audio",
+  incomingCallsDuringBluetoothMode: "Incoming calls in Bluetooth mode",
+  noiseCancelingModeInCycle: "Noise canceling in button cycle",
+  transparencyModeInCycle: "Transparency in button cycle",
+  normalModeInCycle: "Normal in button cycle"
 }
 
 var UNITS = {
@@ -46,14 +57,21 @@ var NONE_LABELS = {
   presetEqualizerProfile: "Custom"
 }
 
-// When a setting applies, as the values other settings must have. A sound
-// mode setting not listed here whose id names a sound mode follows that mode.
+// When a setting applies, as the values other settings must have (or one of
+// several). A sound mode setting not listed here whose id names a sound mode
+// follows that mode.
 var CONDITIONS = {
   noiseCancelingMode: { ambientSoundMode: "NoiseCanceling" },
-  manualNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Manual" },
+  // The Space One calls its manual mode Custom.
+  manualNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: ["Manual", "Custom"] },
+  customNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Custom" },
   adaptiveNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Adaptive" },
+  adaptiveNoiseCancelingSensitivityLevel: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Adaptive" },
+  multiSceneNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "MultiScene" },
   transportationMode: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Transportation" },
   windNoiseSuppression: { ambientSoundMode: "NoiseCanceling" },
+  windNoiseDetected: { ambientSoundMode: "NoiseCanceling" },
+  ancPersonalizedToEarCanal: { ambientSoundMode: "NoiseCanceling" },
   environmentDetection: { ambientSoundMode: "NoiseCanceling" },
   transparencyMode: { ambientSoundMode: "Transparency" },
   manualTransparency: { ambientSoundMode: "Transparency", transparencyMode: "Manual" },
@@ -61,8 +79,10 @@ var CONDITIONS = {
   limitHighVolumeRefreshRate: { limitHighVolume: true }
 }
 
-// A touch control: which earbud, if the model has two, and which gesture.
-var GESTURE = /^(left|right)?(single|double|triple|long)Press$/i
+// A tap on a touch control: which earbud, if the model has two, and how.
+var PRESS = /^(left|right)?(single|double|triple|long)Press$/i
+// Any touch control gesture, taps and slides alike.
+var GESTURE = /^(left|right)?((single|double|triple|long)Press|slide(Up|Down))$/i
 
 function parseStatus(raw) {
   try {
@@ -164,7 +184,9 @@ function applies(settingId, categoryId, values) {
   var conditions = conditionsFor(settingId, categoryId)
   for (var key in conditions) {
     var current = values ? values[key] : undefined
-    if (current !== undefined && current !== null && current !== conditions[key]) return false
+    if (current === undefined || current === null) continue
+    var wanted = [].concat(conditions[key])
+    if (wanted.indexOf(current) === -1) return false
   }
   return true
 }
@@ -197,7 +219,7 @@ function sections(schema, values) {
 
 function label(settingId) {
   if (LABELS[settingId]) return LABELS[settingId]
-  var gesture = GESTURE.exec(settingId)
+  var gesture = PRESS.exec(settingId)
   if (gesture) {
     var side = gesture[1] ? gesture[1].toLowerCase() + " " : ""
     var kind = gesture[2].toLowerCase() === "long" ? "long press" : gesture[2].toLowerCase() + " tap"
@@ -245,6 +267,13 @@ function profileOptions(setting, current) {
   var list = buildOptions(setting)
   if (list.length && !current) list.unshift({ value: "", label: "Unsaved" })
   return list
+}
+
+// openscq30 accepts no changes to the EQ bands of a model without custom
+// profiles (it reports them, so the active preset's curve can be shown), but
+// doesn't say so in the schema.
+function eqReadOnly(schema) {
+  return !!findSetting(schema, "volumeAdjustments") && !findSetting(schema, "customEqualizerProfile")
 }
 
 function rangeOf(setting) {
@@ -430,26 +459,53 @@ function friendlyModel(model) {
 // Battery levels, as the headphones report them: one for headphones, one per
 // earbud and the case for earbuds.
 var BATTERIES = [
-  { level: "batteryLevel", charging: "isCharging", name: "Battery" },
-  { level: "batteryLevelLeft", charging: "isChargingLeft", name: "L" },
-  { level: "batteryLevelRight", charging: "isChargingRight", name: "R" },
+  { level: "batteryLevel", charging: "isCharging", name: "" },
+  { level: "batteryLevelLeft", charging: "isChargingLeft", name: "Left" },
+  { level: "batteryLevelRight", charging: "isChargingRight", name: "Right" },
   { level: "caseBatteryLevel", charging: "isChargingCase", name: "Case" }
 ]
+
+// The same icons, picked the same way, as Omarchy's own battery indicator.
+var BATTERY_ICONS = ["󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+var CHARGING_ICONS = ["󰢜", "󰂆", "󰂇", "󰂈", "󰢝", "󰂉", "󰢞", "󰂊", "󰂋", "󰂅"]
+var UNKNOWN_BATTERY_ICON = "󰂑"
 
 function isCharging(value) {
   return value === true || /^(yes|true|charging)$/i.test(String(value))
 }
 
-function batteryText(values) {
-  if (!values) return ""
-  var parts = []
+// A level as openscq30 reports it ("3/5", "7/10", "85/100") in percent, or
+// null if it isn't one.
+function batteryPercent(level) {
+  var match = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(String(level))
+  if (!match || Number(match[2]) <= 0) return null
+  return Math.max(0, Math.min(100, Math.round(Number(match[1]) / Number(match[2]) * 100)))
+}
+
+function batteries(values) {
+  if (!values) return []
+  var list = []
   for (var i = 0; i < BATTERIES.length; i++) {
     var battery = BATTERIES[i]
     var level = values[battery.level]
     if (level === undefined || level === null || level === "") continue
-    parts.push(battery.name + " " + level + (isCharging(values[battery.charging]) ? " (charging)" : ""))
+    var charging = isCharging(values[battery.charging])
+    var percent = batteryPercent(level)
+    var index = percent === null ? 0 : Math.max(0, Math.min(9, Math.floor(percent / 10)))
+    list.push({
+      name: battery.name,
+      text: percent === null ? String(level) : percent + "%",
+      icon: percent === null ? UNKNOWN_BATTERY_ICON : (charging ? CHARGING_ICONS : BATTERY_ICONS)[index],
+      low: percent !== null && percent <= 20 && !charging
+    })
   }
-  return parts.join(" · ")
+  return list
+}
+
+function batteryText(values) {
+  return batteries(values).map(function(battery) {
+    return (battery.name || "Battery") + " " + battery.text
+  }).join(" · ")
 }
 
 if (typeof module !== "undefined") {
@@ -469,6 +525,7 @@ if (typeof module !== "undefined") {
     profileOptions: profileOptions,
     rangeOf: rangeOf,
     rangeText: rangeText,
+    eqReadOnly: eqReadOnly,
     formatValue: formatValue,
     sameValue: sameValue,
     writeEntry: writeEntry,
@@ -486,6 +543,7 @@ if (typeof module !== "undefined") {
     formatBandLabel: formatBandLabel,
     csvFromBands: csvFromBands,
     friendlyModel: friendlyModel,
+    batteries: batteries,
     batteryText: batteryText
   }
 }

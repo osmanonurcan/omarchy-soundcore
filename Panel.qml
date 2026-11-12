@@ -55,12 +55,18 @@ Panel {
   readonly property string deviceName: status.name || "Soundcore"
   readonly property string unrecognized: status.unrecognized || ""
   readonly property bool missingCli: status.missing === "openscq30-cli"
-  readonly property string batteryText: Model.batteryText(values)
+  readonly property var batteryList: Model.batteries(values)
+  // The model's name, unless the device's own name already says it.
+  readonly property string modelName: {
+    var name = Model.friendlyModel(status.model)
+    return deviceName.toLowerCase().indexOf(name.toLowerCase()) === -1 ? name : ""
+  }
 
   readonly property var eqSetting: Model.findSetting(schemaList, "volumeAdjustments")
   readonly property var customSetting: Model.findSetting(schemaList, "customEqualizerProfile")
   readonly property string customValue: values.customEqualizerProfile || ""
   readonly property var profileOptions: Model.profileOptions(customSetting, customValue)
+  readonly property bool eqReadOnly: Model.eqReadOnly(schemaList)
 
   readonly property bool hasSoundModes: soundRowIds.length > 0
   readonly property bool hasEqualizer: eqRowIds.length > 0 || !!customSetting || !!eqSetting
@@ -373,9 +379,7 @@ Panel {
           PanelHero {
             width: parent.width
             title: root.deviceName
-            // The title already names the device; the line under it has room
-            // for every battery level, which the detail pill doesn't.
-            meta: root.connected ? (root.batteryText || Model.friendlyModel(root.status.model)) : "Disconnected"
+            meta: root.connected ? root.modelName : "Disconnected"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             iconComponent: Component {
@@ -386,6 +390,51 @@ Panel {
                 font.family: root.bar.fontFamily
                 font.pixelSize: Style.font.display
                 opacity: root.connected ? 1.0 : 0.4
+              }
+            }
+          }
+
+          // Each battery as an icon, its name and a percentage, like
+          // Omarchy's own battery indicator; red when it's running low.
+          Flow {
+            visible: root.connected && root.batteryList.length > 0
+            width: parent.width
+            spacing: Style.space(18)
+
+            Repeater {
+              model: root.connected ? root.batteryList : []
+
+              Row {
+                required property var modelData
+                spacing: Style.space(6)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: modelData.icon
+                  color: modelData.low ? root.bar.urgent : root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                Text {
+                  visible: modelData.name !== ""
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: modelData.name
+                  color: Qt.darker(root.bar.foreground, 1.3)
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: modelData.text
+                  color: modelData.low ? root.bar.urgent : root.bar.foreground
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.bodySmall
+                }
               }
             }
           }
@@ -579,10 +628,21 @@ Panel {
               spacing: Style.space(10)
 
               SectionHeader {
-                title: "Custom EQ"
+                title: root.eqReadOnly ? "EQ bands" : "Custom EQ"
                 expanded: customEq.expanded
                 bar: root.bar
                 onToggled: root.toggleSection("customEq")
+              }
+
+              Text {
+                visible: customEq.expanded && root.eqReadOnly
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: "This model only has presets, so the bands show the active one and can't be changed."
+                color: Qt.darker(root.bar.foreground, 1.3)
+                font.family: root.bar.fontFamily
+                font.pixelSize: Style.font.bodySmall
               }
 
               Repeater {
@@ -623,6 +683,8 @@ Panel {
                   PanelSlider {
                     bar: root.bar
                     width: parent.width
+                    enabled: !root.eqReadOnly
+                    opacity: root.eqReadOnly ? 0.5 : 1.0
                     minimum: root.eqSetting.setting.min
                     maximum: root.eqSetting.setting.max
                     step: 1

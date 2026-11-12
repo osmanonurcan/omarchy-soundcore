@@ -22,7 +22,9 @@ offers to install it; your headphones are registered with it automatically.
 ## Usage
 
 Click the headphone icon in the bar. The panel shows whichever Soundcore
-device is currently connected over Bluetooth:
+device is currently connected over Bluetooth, with the battery level of each
+earbud and the case (or of the headphones) under its name, and these
+settings:
 
 - **Sound mode** — Normal / Transparency / Noise Canceling (options vary by
   model), with the settings that belong to the active mode under it: the
@@ -32,7 +34,8 @@ device is currently connected over Bluetooth:
 - **My EQ profiles** — save the current EQ under a name, switch between saved
   profiles, and delete them (OpenSCQ30 keeps these on your computer)
 - **Custom EQ** — live sliders per band (click its title to show them);
-  dragging one applies immediately and clears the active preset
+  dragging one applies immediately and clears the active preset. Models
+  without custom EQ support show the active preset's bands, locked
 
 Any other sound mode or equalizer setting OpenSCQ30 exposes for your model
 shows up too, as buttons, a dropdown, a switch or a slider depending on its
@@ -50,6 +53,10 @@ example:
   auto play/pause, touch lock, tones and prompts, and auto power off
 - **About** — firmware versions, serial number, and how the earbuds are
   linked
+
+Two kinds of settings OpenSCQ30 has aren't shown yet: the list of devices
+connected to headphones with multipoint (dual connections), and the color of
+models with lights.
 
 If no supported device is connected, or your specific model doesn't expose
 any settings in OpenSCQ30, the panel says so plainly instead of showing empty
