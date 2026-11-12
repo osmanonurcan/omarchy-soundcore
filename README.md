@@ -19,14 +19,6 @@ the plugin talks to your headphones through, isn't installed yet, the panel
 offers to install it; your headphones are registered with it automatically.
 [How it works](#how-it-works) has the details, and how to do either by hand.
 
-If you have the original plugin this one started from
-(`io.github.s-w-3.soundcore`) installed, remove it so you don't get two
-widgets:
-
-```
-omarchy plugin remove io.github.s-w-3.soundcore
-```
-
 ## Usage
 
 Click the headphone icon in the bar. The panel shows whichever Soundcore
