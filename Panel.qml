@@ -337,6 +337,9 @@ Panel {
         id: scrollArea
         anchors.fill: parent
         clip: true
+        // Controls at the left edge would have their 1px left border clipped
+        // away on a fractionally scaled screen; keep a border's width clear.
+        leftPadding: Math.max(Style.normalBorderWidth, Style.hoverBorderWidth)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         ScrollBar.vertical.policy: panelColumn.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
 
