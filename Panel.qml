@@ -35,6 +35,10 @@ Panel {
   // update doesn't rebuild them under the pointer.
   property var soundRowIds: []
   property var eqRowIds: []
+  // The device's other categories, each a section that starts collapsed:
+  // [{ id, title, rows }].
+  property var sectionList: []
+  property var expandedSections: ({})
   property int openPopups: 0
 
   property bool namingProfile: false
@@ -49,6 +53,7 @@ Panel {
   readonly property var schemaList: status.schema || []
   readonly property var values: status.values || {}
   readonly property string deviceName: status.name || "Soundcore"
+  readonly property string unrecognized: status.unrecognized || ""
   readonly property string batteryText: Model.batteryText(values)
 
   readonly property var eqSetting: Model.findSetting(schemaList, "volumeAdjustments")
@@ -58,7 +63,7 @@ Panel {
 
   readonly property bool hasSoundModes: soundRowIds.length > 0
   readonly property bool hasEqualizer: eqRowIds.length > 0 || !!customSetting || !!eqSetting
-  readonly property bool hasControls: hasSoundModes || hasEqualizer
+  readonly property bool hasControls: hasSoundModes || hasEqualizer || sectionList.length > 0
 
   function settingFor(id) { return Model.findSetting(schemaList, id) }
 
@@ -110,6 +115,14 @@ Panel {
     if (sound.join("\n") !== root.soundRowIds.join("\n")) root.soundRowIds = sound
     var eq = Model.rowIds(schema, "equalizer", values, ["customEqualizerProfile", "volumeAdjustments"])
     if (eq.join("\n") !== root.eqRowIds.join("\n")) root.eqRowIds = eq
+    var sections = Model.sections(schema, values)
+    if (JSON.stringify(sections) !== JSON.stringify(root.sectionList)) root.sectionList = sections
+  }
+
+  function toggleSection(id) {
+    var next = Object.assign({}, root.expandedSections)
+    next[id] = !next[id]
+    root.expandedSections = next
   }
 
   onStatusChanged: syncRows()
@@ -297,7 +310,8 @@ Panel {
     bar: root.bar
     text: "󰋋"
     dimmed: !root.connected
-    tooltipText: root.connected ? root.deviceName : "No Soundcore headphones connected"
+    tooltipText: root.connected ? root.deviceName
+      : (root.unrecognized !== "" ? root.unrecognized + ": model not recognized by OpenSCQ30" : "No Soundcore headphones connected")
     onPressed: function(b) { root.toggle() }
   }
 
@@ -355,7 +369,9 @@ Panel {
             width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: "Connect your Soundcore headphones over Bluetooth to control them here."
+            text: root.unrecognized !== ""
+              ? "“" + root.unrecognized + "” is connected, but OpenSCQ30 doesn't recognize its model, so it can't be controlled here."
+              : "Connect your Soundcore headphones over Bluetooth to control them here."
             color: Qt.darker(root.bar.foreground, 1.3)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -388,7 +404,7 @@ Panel {
             width: parent.width
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: "This model doesn't have sound mode or equalizer controls in OpenSCQ30 yet."
+            text: "This model doesn't have any settings OpenSCQ30 can change yet."
             color: Qt.darker(root.bar.foreground, 1.3)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.bodySmall
@@ -578,6 +594,68 @@ Panel {
                       root.commitBands()
                     }
                   }
+                }
+              }
+            }
+          }
+
+          // ---------- Other categories ----------
+          Repeater {
+            model: root.connected ? root.sectionList : []
+
+            Column {
+              id: section
+              required property var modelData
+              readonly property bool expanded: !!root.expandedSections[modelData.id]
+              width: panelColumn.width
+              spacing: Style.space(12)
+
+              PanelSeparator {
+                foreground: root.bar.foreground
+              }
+
+              Item {
+                width: parent.width
+                implicitHeight: sectionTitle.implicitHeight
+
+                PanelSectionHeader {
+                  id: sectionTitle
+                  anchors.left: parent.left
+                  anchors.right: chevron.left
+                  text: section.modelData.title.toUpperCase()
+                  elide: Text.ElideRight
+                  foreground: root.bar.foreground
+                  fontFamily: root.bar.fontFamily
+                }
+
+                Text {
+                  id: chevron
+                  anchors.right: parent.right
+                  anchors.verticalCenter: sectionTitle.verticalCenter
+                  textFormat: Text.PlainText
+                  text: section.expanded ? "󰅀" : "󰅂"
+                  color: Qt.darker(root.bar.foreground, sectionArea.containsMouse ? 1.0 : 1.4)
+                  font.family: root.bar.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                MouseArea {
+                  id: sectionArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.toggleSection(section.modelData.id)
+                }
+              }
+
+              Column {
+                visible: section.expanded
+                width: parent.width
+                spacing: Style.space(12)
+
+                Repeater {
+                  model: section.expanded ? section.modelData.rows : []
+                  delegate: settingRow
                 }
               }
             }

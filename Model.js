@@ -1,16 +1,44 @@
-// Setting types the panel can show; keep in step with soundcore-status.
+// Setting types the panel can change, and reads the values of; keep in step
+// with soundcore-status.
 var CONTROL_TYPES = ["select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer"]
+// Also shown: read-only information, and actions, which have no value.
+var SHOWN_TYPES = CONTROL_TYPES.concat(["information", "action"])
+
+// The categories the panel lays out itself; every other one is a section.
+var OWN_CATEGORIES = ["soundModes", "equalizer"]
+
+var SECTION_TITLES = {
+  buttonConfiguration: "Touch controls",
+  limitHighVolume: "Volume limit",
+  miscellaneous: "Other settings",
+  deviceInformation: "About"
+}
 
 var LABELS = {
   ambientSoundMode: "Sound mode",
   noiseCancelingMode: "Noise canceling",
   manualNoiseCanceling: "Noise canceling strength",
+  adaptiveNoiseCanceling: "Adaptive level",
+  transportationMode: "Transportation",
   windNoiseSuppression: "Wind noise reduction",
   transparencyMode: "Transparency",
   manualTransparency: "Transparency level",
   presetEqualizerProfile: "Equalizer preset",
   customEqualizerProfile: "My EQ profiles",
-  volumeAdjustments: "Custom EQ"
+  volumeAdjustments: "Custom EQ",
+  resetButtonsToDefault: "Reset to defaults",
+  limitHighVolumeDbLimit: "Maximum volume",
+  limitHighVolumeRefreshRate: "Volume check interval",
+  autoPlayPause: "Auto play/pause",
+  firmwareVersion: "Firmware",
+  firmwareVersionLeft: "Firmware (left)",
+  firmwareVersionRight: "Firmware (right)",
+  twsStatus: "Earbud link",
+  hostDevice: "Primary earbud"
+}
+
+var UNITS = {
+  limitHighVolumeDbLimit: " dB"
 }
 
 // What the "none" value of an optional select means.
@@ -18,24 +46,40 @@ var NONE_LABELS = {
   presetEqualizerProfile: "Custom"
 }
 
-// When a setting applies, as the values other settings must have. A setting
-// not listed here whose id names a sound mode follows that mode.
+// When a setting applies, as the values other settings must have. A sound
+// mode setting not listed here whose id names a sound mode follows that mode.
 var CONDITIONS = {
   noiseCancelingMode: { ambientSoundMode: "NoiseCanceling" },
   manualNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Manual" },
+  adaptiveNoiseCanceling: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Adaptive" },
+  transportationMode: { ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Transportation" },
   windNoiseSuppression: { ambientSoundMode: "NoiseCanceling" },
+  environmentDetection: { ambientSoundMode: "NoiseCanceling" },
   transparencyMode: { ambientSoundMode: "Transparency" },
-  manualTransparency: { ambientSoundMode: "Transparency", transparencyMode: "Manual" }
+  manualTransparency: { ambientSoundMode: "Transparency", transparencyMode: "Manual" },
+  limitHighVolumeDbLimit: { limitHighVolume: true },
+  limitHighVolumeRefreshRate: { limitHighVolume: true }
 }
+
+// A touch control: which earbud, if the model has two, and which gesture.
+var GESTURE = /^(left|right)?(single|double|triple|long)Press$/i
 
 function parseStatus(raw) {
   try {
     var parsed = JSON.parse(raw || "{}")
-    if (!parsed || typeof parsed !== "object" || !parsed.connected) return { connected: false }
+    if (!parsed || typeof parsed !== "object") return { connected: false }
+    if (!parsed.connected) return disconnected(parsed.unrecognized)
     return parsed
   } catch (e) {
     return { connected: false }
   }
+}
+
+// Not connected, naming the Soundcore device that is if openscq30 doesn't
+// recognize it.
+function disconnected(unrecognized) {
+  if (typeof unrecognized !== "string" || unrecognized === "") return { connected: false }
+  return { connected: false, unrecognized: unrecognized.slice(0, 64) }
 }
 
 // The values soundcore-set read back after writing, or null.
@@ -53,7 +97,7 @@ function parseValues(raw) {
 // already read from that same device are kept; a full read that failed keeps
 // them too, with the error attached, rather than collapsing the panel.
 function mergeStatus(prev, next) {
-  if (!next || !next.connected) return { connected: false }
+  if (!next || !next.connected) return disconnected(next && next.unrecognized)
   var sameDevice = !!(prev && prev.connected && prev.detailed && prev.mac === next.mac)
   if (!sameDevice) return next
   if (!next.detailed) return prev
@@ -87,6 +131,12 @@ function isControl(setting) {
   return !!setting && CONTROL_TYPES.indexOf(setting.type) !== -1
 }
 
+function isShown(setting) {
+  if (!setting || SHOWN_TYPES.indexOf(setting.type) === -1) return false
+  // The battery and charging state are in the panel's header.
+  return !(setting.type === "information" && /battery|charging/i.test(setting.settingId))
+}
+
 function readableIds(schema) {
   var ids = []
   for (var i = 0; i < (schema || []).length; i++) {
@@ -97,16 +147,17 @@ function readableIds(schema) {
   return ids
 }
 
-function conditionsFor(settingId) {
+function conditionsFor(settingId, categoryId) {
   if (CONDITIONS[settingId]) return CONDITIONS[settingId]
+  if (categoryId !== "soundModes") return {}
   if (/noisecanceling/i.test(settingId)) return { ambientSoundMode: "NoiseCanceling" }
   if (/transparency/i.test(settingId)) return { ambientSoundMode: "Transparency" }
   return {}
 }
 
 // A setting applies unless a value it depends on is known to be different.
-function applies(settingId, values) {
-  var conditions = conditionsFor(settingId)
+function applies(settingId, categoryId, values) {
+  var conditions = conditionsFor(settingId, categoryId)
   for (var key in conditions) {
     var current = values ? values[key] : undefined
     if (current !== undefined && current !== null && current !== conditions[key]) return false
@@ -120,16 +171,43 @@ function rowIds(schema, categoryId, values, skip) {
   var settings = settingsIn(schema, categoryId)
   for (var i = 0; i < settings.length; i++) {
     var id = settings[i].settingId
-    if (!isControl(settings[i]) || (skip && skip.indexOf(id) !== -1)) continue
-    if (applies(id, values)) ids.push(id)
+    if (!isShown(settings[i]) || (skip && skip.indexOf(id) !== -1)) continue
+    if (applies(id, categoryId, values)) ids.push(id)
   }
   return ids
 }
 
+// The categories drawn as their own sections, with their rows, in the
+// device's order: every one but those the panel lays out itself, if it has
+// anything to show.
+function sections(schema, values) {
+  var list = []
+  for (var i = 0; i < (schema || []).length; i++) {
+    var id = schema[i].categoryId
+    if (OWN_CATEGORIES.indexOf(id) !== -1) continue
+    var rows = rowIds(schema, id, values)
+    if (rows.length) list.push({ id: id, title: SECTION_TITLES[id] || label(id), rows: rows })
+  }
+  return list
+}
+
 function label(settingId) {
   if (LABELS[settingId]) return LABELS[settingId]
+  var gesture = GESTURE.exec(settingId)
+  if (gesture) {
+    var side = gesture[1] ? gesture[1].toLowerCase() + " " : ""
+    var kind = gesture[2].toLowerCase() === "long" ? "long press" : gesture[2].toLowerCase() + " tap"
+    var text = side + kind
+    return text.charAt(0).toUpperCase() + text.slice(1)
+  }
   var words = String(settingId).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase()
   return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+// openscq30 wraps numbers in its labels in invisible direction marks
+// ("⁨10⁩ minutes"), which some fonts draw as boxes.
+function plainLabel(text) {
+  return String(text).replace(/[⁦-⁩]/g, "")
 }
 
 function buildOptions(setting) {
@@ -140,7 +218,7 @@ function buildOptions(setting) {
   for (var i = 0; i < options.length; i++) {
     list.push({
       value: String(options[i]),
-      label: String(labels[i] !== undefined ? labels[i] : options[i])
+      label: plainLabel(labels[i] !== undefined ? labels[i] : options[i])
     })
   }
   return list
@@ -148,11 +226,14 @@ function buildOptions(setting) {
 
 // Options for a select. An optional select's "none" is offered only while
 // it's the current value, so it shows what's active without being a choice
-// that does something unexpected.
+// that does something unexpected -- except for a touch control, where it
+// means the gesture does nothing, a choice of its own.
 function selectOptions(setting, current) {
   var list = buildOptions(setting)
-  if (setting && setting.type === "optionalSelect" && list.length && !current)
-    list.unshift({ value: "", label: NONE_LABELS[setting.settingId] || "None" })
+  if (!setting || setting.type !== "optionalSelect" || !list.length) return list
+  var gesture = GESTURE.test(setting.settingId)
+  if (gesture || !current)
+    list.unshift({ value: "", label: gesture ? "No action" : (NONE_LABELS[setting.settingId] || "None") })
   return list
 }
 
@@ -168,6 +249,10 @@ function rangeOf(setting) {
   var max = Number(range.end) || 0
   var step = Number(range.step) || 1
   return { min: min, max: max, step: step, ticks: Math.round((max - min) / step) + 1 }
+}
+
+function rangeText(settingId, value) {
+  return String(value) + (UNITS[settingId] || "")
 }
 
 // ---- Writes ----
@@ -206,6 +291,9 @@ function writeEffects(settingId, value, bands) {
 // values the panel shows until the device confirms them.
 function writeEntry(setting, value, bands) {
   var id = setting.settingId
+  // An action has no value to show, and like a profile command, must run
+  // after the writes queued ahead of it and before those queued after.
+  if (setting.type === "action") return { id: id, arg: "", overlay: {}, command: true }
   // openscq30 reads a leading + or - as save/delete; \ marks a plain name.
   var arg = setting.type === "modifiableSelect" ? "\\" + value : formatValue(value)
   return { id: id, arg: arg, overlay: writeEffects(id, value, bands || {}) }
@@ -329,19 +417,33 @@ function friendlyModel(model) {
   var known = {
     "SoundcoreA3028": "Life Q30",
     "SoundcoreA3040": "Space Q45",
+    "SoundcoreA3947": "Liberty 4 NC",
     "SoundcoreA3948": "A20i"
   }
   return known[model] || model || "Unknown model"
 }
 
+// Battery levels, as the headphones report them: one for headphones, one per
+// earbud and the case for earbuds.
+var BATTERIES = [
+  { level: "batteryLevel", charging: "isCharging", name: "Battery" },
+  { level: "batteryLevelLeft", charging: "isChargingLeft", name: "L" },
+  { level: "batteryLevelRight", charging: "isChargingRight", name: "R" },
+  { level: "caseBatteryLevel", charging: "isChargingCase", name: "Case" }
+]
+
+function isCharging(value) {
+  return value === true || /^(yes|true|charging)$/i.test(String(value))
+}
+
 function batteryText(values) {
   if (!values) return ""
   var parts = []
-  for (var key in values) {
-    if (!Object.prototype.hasOwnProperty.call(values, key)) continue
-    if (key.toLowerCase().indexOf("battery") === -1) continue
-    var part = key.replace(/^battery/i, "").replace(/([A-Z])/g, " $1").trim()
-    parts.push((part ? part + " " : "") + values[key])
+  for (var i = 0; i < BATTERIES.length; i++) {
+    var battery = BATTERIES[i]
+    var level = values[battery.level]
+    if (level === undefined || level === null || level === "") continue
+    parts.push(battery.name + " " + level + (isCharging(values[battery.charging]) ? " (charging)" : ""))
   }
   return parts.join(" · ")
 }
@@ -356,11 +458,13 @@ if (typeof module !== "undefined") {
     findSetting: findSetting,
     readableIds: readableIds,
     rowIds: rowIds,
+    sections: sections,
     label: label,
     buildOptions: buildOptions,
     selectOptions: selectOptions,
     profileOptions: profileOptions,
     rangeOf: rangeOf,
+    rangeText: rangeText,
     formatValue: formatValue,
     sameValue: sameValue,
     writeEntry: writeEntry,

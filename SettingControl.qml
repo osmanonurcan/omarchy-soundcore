@@ -4,7 +4,8 @@ import qs.Commons
 import "Model.js" as Model
 
 // One device setting, drawn by its openscq30 type: a row of choices or a
-// dropdown for a select, a switch for a toggle, a stepped slider for a range.
+// dropdown for a select, a switch for a toggle, a stepped slider for a range,
+// a line of text for information, and a button for an action.
 Column {
   id: root
 
@@ -19,9 +20,13 @@ Column {
 
   readonly property string type: setting ? setting.type : ""
   readonly property var options: Model.selectOptions(setting, value)
-  readonly property bool isSelect: type === "select" || type === "optionalSelect"
+  readonly property bool isSelect: type === "select" || type === "optionalSelect" || type === "modifiableSelect"
   readonly property bool asButtons: type === "select" && options.length <= 3
   readonly property var range: Model.rangeOf(setting)
+  readonly property bool oneLine: type === "toggle" || type === "information" || type === "action"
+
+  // An action can't be undone, so it takes a second click.
+  property bool armed: false
 
   function snap(v) {
     return root.range.min + Math.round((v - root.range.min) / root.range.step) * root.range.step
@@ -30,7 +35,7 @@ Column {
   spacing: Style.space(6)
 
   Item {
-    visible: root.type !== "toggle"
+    visible: !root.oneLine
     width: parent.width
     implicitHeight: header.implicitHeight
 
@@ -47,7 +52,7 @@ Column {
       anchors.right: parent.right
       anchors.verticalCenter: header.verticalCenter
       textFormat: Text.PlainText
-      text: String(root.snap(slider.liveValue))
+      text: Model.rangeText(root.setting ? root.setting.settingId : "", root.snap(slider.liveValue))
       color: Qt.darker(root.bar.foreground, 1.3)
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.caption
@@ -108,6 +113,62 @@ Column {
       foreground: root.bar.foreground
       onToggled: root.edited(!toggle.checked)
     }
+  }
+
+  Item {
+    visible: root.type === "information"
+    width: parent.width
+    implicitHeight: infoLabel.implicitHeight
+
+    Text {
+      id: infoLabel
+      anchors.left: parent.left
+      anchors.right: infoValue.left
+      anchors.rightMargin: Style.space(8)
+      textFormat: Text.PlainText
+      text: root.label
+      elide: Text.ElideRight
+      color: root.bar.foreground
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.font.body
+    }
+
+    Text {
+      id: infoValue
+      anchors.right: parent.right
+      anchors.verticalCenter: infoLabel.verticalCenter
+      width: Math.min(implicitWidth, parent.width / 2)
+      horizontalAlignment: Text.AlignRight
+      textFormat: Text.PlainText
+      text: root.value === undefined || root.value === null ? "–" : String(root.value)
+      elide: Text.ElideRight
+      color: Qt.darker(root.bar.foreground, 1.3)
+      font.family: root.bar.fontFamily
+      font.pixelSize: Style.font.body
+    }
+  }
+
+  Button {
+    visible: root.type === "action"
+    text: root.armed ? root.label + "?" : root.label
+    bordered: true
+    foreground: root.armed ? root.bar.urgent : root.bar.foreground
+    fontFamily: root.bar.fontFamily
+    onClicked: {
+      if (!root.armed) {
+        root.armed = true
+        disarm.restart()
+        return
+      }
+      root.armed = false
+      root.edited("")
+    }
+  }
+
+  Timer {
+    id: disarm
+    interval: 4000
+    onTriggered: root.armed = false
   }
 
   PanelSlider {

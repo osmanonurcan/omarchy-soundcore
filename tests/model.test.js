@@ -12,6 +12,13 @@ const detailed = {
   values: { ambientSoundMode: "Normal", volumeAdjustments: [0, 0, 0] }
 }
 
+test("parseStatus keeps the name of a connected device openscq30 doesn't recognize", () => {
+  const raw = '{"connected":false,"unrecognized":"soundcore Mystery 9"}'
+  assert.deepEqual(Model.parseStatus(raw), { connected: false, unrecognized: "soundcore Mystery 9" })
+  assert.deepEqual(Model.mergeStatus(detailed, Model.parseStatus(raw)), { connected: false, unrecognized: "soundcore Mystery 9" })
+  assert.deepEqual(Model.parseStatus('{"connected":false,"unrecognized":{"a":1}}'), { connected: false })
+})
+
 test("parseStatus treats unparseable output as disconnected", () => {
   assert.deepEqual(Model.parseStatus(""), { connected: false })
   assert.deepEqual(Model.parseStatus("not json"), { connected: false })
@@ -73,6 +80,7 @@ test("localPath turns a resolved file URL into a filesystem path", () => {
 
 test("friendlyModel names known models and falls back to the id", () => {
   assert.equal(Model.friendlyModel("SoundcoreA3040"), "Space Q45")
+  assert.equal(Model.friendlyModel("SoundcoreA3947"), "Liberty 4 NC")
   assert.equal(Model.friendlyModel("SoundcoreA9999"), "SoundcoreA9999")
   assert.equal(Model.friendlyModel(""), "Unknown model")
 })
@@ -121,9 +129,10 @@ test("rowIds places settings it doesn't know by the sound mode their id names", 
     { settingId: "fancyNewThing", type: "toggle" },
     { settingId: "someInformation", type: "information" }
   ] }]
-  assert.deepEqual(Model.rowIds(other, "soundModes", { ambientSoundMode: "Normal" }), ["ambientSoundMode", "fancyNewThing"])
+  assert.deepEqual(Model.rowIds(other, "soundModes", { ambientSoundMode: "Normal" }),
+    ["ambientSoundMode", "fancyNewThing", "someInformation"])
   assert.deepEqual(Model.rowIds(other, "soundModes", { ambientSoundMode: "NoiseCanceling" }),
-    ["ambientSoundMode", "customNoiseCanceling", "fancyNewThing"])
+    ["ambientSoundMode", "customNoiseCanceling", "fancyNewThing", "someInformation"])
 })
 
 test("rowIds leaves out the settings the panel draws itself", () => {
@@ -133,7 +142,10 @@ test("rowIds leaves out the settings the panel draws itself", () => {
 
 test("label names known settings and spells out the rest", () => {
   assert.equal(Model.label("windNoiseSuppression"), "Wind noise reduction")
-  assert.equal(Model.label("limitHighVolumeDbLimit"), "Limit high volume db limit")
+  assert.equal(Model.label("fancyNewThing"), "Fancy new thing")
+  assert.equal(Model.label("leftSinglePress"), "Left single tap")
+  assert.equal(Model.label("rightLongPress"), "Right long press")
+  assert.equal(Model.label("doublePress"), "Double tap")
 })
 
 test("selectOptions offers the none choice of an optional select only while it's active", () => {
@@ -265,4 +277,92 @@ test("cleanProfileName trims names and refuses empty or overlong ones", () => {
   assert.equal(Model.cleanProfileName("  Work  "), "Work")
   assert.equal(Model.cleanProfileName("   "), "")
   assert.equal(Model.cleanProfileName("x".repeat(65)), "")
+})
+
+// ---- The Liberty 4 NC's real schema and values, as soundcore-status reads them ----
+const liberty = require("./fixtures/liberty-4-nc/schema.json").filter((c) => c.categoryId !== "equalizerImportExport")
+const libertyValues = require("./fixtures/liberty-4-nc/values.json")
+const libertySetting = (id) => Model.findSetting(liberty, id)
+const soundRows = (values) => Model.rowIds(liberty, "soundModes", Object.assign({}, libertyValues, values))
+
+test("rowIds shows each noise canceling mode's own settings", () => {
+  assert.deepEqual(soundRows({ ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Adaptive" }),
+    ["ambientSoundMode", "noiseCancelingMode", "adaptiveNoiseCanceling", "windNoiseSuppression", "environmentDetection"])
+  assert.deepEqual(soundRows({ ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Manual" }),
+    ["ambientSoundMode", "noiseCancelingMode", "manualNoiseCanceling", "windNoiseSuppression", "environmentDetection"])
+  assert.deepEqual(soundRows({ ambientSoundMode: "NoiseCanceling", noiseCancelingMode: "Transportation" }),
+    ["ambientSoundMode", "noiseCancelingMode", "transportationMode", "windNoiseSuppression", "environmentDetection"])
+})
+
+test("rowIds leaves noise canceling settings out of the other sound modes", () => {
+  assert.deepEqual(soundRows({ ambientSoundMode: "Transparency" }), ["ambientSoundMode", "transparencyMode"])
+  assert.deepEqual(soundRows({ ambientSoundMode: "Normal" }), ["ambientSoundMode"])
+})
+
+test("sections lists every other category with something to show, in the device's order", () => {
+  assert.deepEqual(Model.sections(liberty, libertyValues), [
+    { id: "buttonConfiguration", title: "Touch controls", rows: [
+      "leftSinglePress", "rightSinglePress", "leftDoublePress", "rightDoublePress",
+      "leftLongPress", "rightLongPress", "leftTriplePress", "rightTriplePress", "resetButtonsToDefault"] },
+    { id: "limitHighVolume", title: "Volume limit", rows: ["limitHighVolume"] },
+    { id: "miscellaneous", title: "Other settings", rows: [
+      "touchTone", "gamingMode", "soundLeakCompensation", "surroundSound", "autoPlayPause",
+      "wearingTone", "touchLock", "lowBatteryPrompt", "autoPowerOff"] },
+    { id: "deviceInformation", title: "About", rows: [
+      "serialNumber", "firmwareVersionLeft", "firmwareVersionRight", "twsStatus", "hostDevice"] }
+  ])
+})
+
+test("sections shows the volume limit's settings only while it's on", () => {
+  const on = Model.sections(liberty, Object.assign({}, libertyValues, { limitHighVolume: true }))
+  assert.deepEqual(on[1].rows, ["limitHighVolume", "limitHighVolumeDbLimit", "limitHighVolumeRefreshRate"])
+})
+
+test("sections names categories it doesn't know and skips empty ones", () => {
+  const other = [
+    { categoryId: "soundModes", settings: [{ settingId: "ambientSoundMode", type: "select" }] },
+    { categoryId: "fancyNewCategory", settings: [{ settingId: "noiseCancelingModeInCycle", type: "toggle" }] },
+    { categoryId: "nothingToShow", settings: [{ settingId: "someList", type: "multiSelect" }] }
+  ]
+  // Only a sound mode setting follows the sound mode its id names.
+  assert.deepEqual(Model.sections(other, { ambientSoundMode: "Normal" }),
+    [{ id: "fancyNewCategory", title: "Fancy new category", rows: ["noiseCancelingModeInCycle"] }])
+})
+
+test("selectOptions always offers no action for a touch control", () => {
+  const press = libertySetting("leftSinglePress")
+  assert.deepEqual(Model.selectOptions(press, "PlayPause")[0], { value: "", label: "No action" })
+  assert.deepEqual(Model.selectOptions(press, null)[0], { value: "", label: "No action" })
+  assert.equal(Model.selectOptions(press, null).length, 8)
+})
+
+test("buildOptions drops the invisible direction marks openscq30 puts around numbers", () => {
+  assert.deepEqual(Model.buildOptions(libertySetting("autoPowerOff")).map((o) => o.label),
+    ["Disabled", "10 minutes", "20 minutes", "30 minutes", "60 minutes"])
+})
+
+test("writeEntry runs an action without showing a value for it", () => {
+  const entry = Model.writeEntry(libertySetting("resetButtonsToDefault"), "", {})
+  assert.deepEqual(entry, { id: "resetButtonsToDefault", arg: "", overlay: {}, command: true })
+})
+
+test("readableIds leaves out actions and information", () => {
+  const ids = Model.readableIds(liberty)
+  assert.equal(ids.includes("resetButtonsToDefault"), false)
+  assert.equal(ids.includes("firmwareVersionLeft"), false)
+  assert.equal(ids.includes("leftSinglePress"), true)
+})
+
+test("rangeText adds the unit a range is in", () => {
+  assert.equal(Model.rangeText("limitHighVolumeDbLimit", 90), "90 dB")
+  assert.equal(Model.rangeText("manualNoiseCanceling", 3), "3")
+})
+
+test("batteryText names each earbud and the case, and marks one charging", () => {
+  assert.equal(Model.batteryText(libertyValues), "L 3/5 · R 2/5 · Case 3/5")
+  assert.equal(Model.batteryText({ batteryLevelLeft: "3/5", isChargingLeft: "Yes", batteryLevelRight: "2/5", isChargingRight: "No" }),
+    "L 3/5 (charging) · R 2/5")
+  assert.equal(Model.batteryText({ batteryLevel: "4/5", firmwareVersion: "02.61" }), "Battery 4/5")
+  assert.equal(Model.batteryText({ batteryLevel: "4/5", isCharging: true }), "Battery 4/5 (charging)")
+  assert.equal(Model.batteryText({}), "")
 })

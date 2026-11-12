@@ -8,8 +8,9 @@
 # exists -- openscq30's rule that only one connection to a device can be open
 # at a time.
 #
-# State lives in $FAKE_SCQ_STATE: schema.json, values.json, calls.log, and
-# fail-next (when present, the next device call fails with its contents).
+# State lives in $FAKE_SCQ_STATE: schema.json, values.json, paired.json,
+# models.json (what `list-models --json` prints), calls.log, and fail-next
+# (when present, the next device call fails with its contents).
 set -uo pipefail
 
 state=${FAKE_SCQ_STATE:?FAKE_SCQ_STATE must be set}
@@ -17,7 +18,21 @@ echo "$*" >>"$state/calls.log"
 
 case "${1:-}" in
   paired-devices)
-    echo '[{"macAddress":"AA:BB:CC:DD:EE:FF","model":"SoundcoreA3040","isDemo":false}]'
+    case "${2:-}" in
+      list) cat "$state/paired.json" ;;
+      add)
+        # paired-devices add --mac-address <mac> --model <model>; re-adding
+        # a device replaces it, as openscq30 does.
+        jq --arg mac "$4" --arg model "$6" \
+          'map(select(.macAddress != $mac)) + [{macAddress: $mac, model: $model, isDemo: false}]' \
+          "$state/paired.json" >"$state/paired.json.tmp" && mv "$state/paired.json.tmp" "$state/paired.json"
+        echo Paired
+        ;;
+    esac
+    exit 0
+    ;;
+  list-models)
+    cat "$state/models.json"
     exit 0
     ;;
   device) ;;

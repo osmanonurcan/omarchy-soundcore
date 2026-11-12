@@ -1,0 +1,8 @@
+[
+  { "model": "SoundcoreA3028", "name": "Soundcore Q30 / Life Q30" },
+  { "model": "SoundcoreA3040", "name": "Soundcore Space Q45" },
+  { "model": "SoundcoreA3947", "name": "Soundcore Liberty 4 NC" },
+  { "model": "SoundcoreA3949", "name": "Soundcore P20i / P25i / R50i" },
+  { "model": "SoundcoreA3959", "name": "Soundcore P30i / R50i NC" },
+  { "model": "SoundcoreA9999", "name": "Soundcore R50i" }
+]

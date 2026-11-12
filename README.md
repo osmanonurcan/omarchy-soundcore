@@ -2,13 +2,14 @@
 
 An [Omarchy](https://omarchy.org/) shell plugin that adds a bar widget for
 controlling Soundcore headphones and earbuds: sound mode (ANC/Transparency/
-Normal), noise-canceling sub-mode, equalizer presets, and a live 8-band
-custom EQ.
+Normal), noise-canceling sub-mode, equalizer presets, a live 8-band custom
+EQ, and whatever else OpenSCQ30 can change on your model, such as touch
+controls, a volume limit, or auto power off.
 
 It's a thin UI over [OpenSCQ30](https://github.com/Oppzippy/OpenSCQ30), the
 open-source Soundcore control library/CLI for Linux. Whatever settings
-OpenSCQ30 exposes for your specific model (sound modes, equalizer, battery)
-are what the panel shows — the widget reads the device's capabilities at
+OpenSCQ30 exposes for your specific model (sound modes, equalizer, touch
+controls, battery, and so on) are what the panel shows — the widget reads the device's capabilities at
 runtime rather than assuming a fixed feature set, so it degrades gracefully
 on models with partial support (e.g. some earbuds only expose battery level,
 no sound mode/EQ control) and picks up new capabilities automatically as
@@ -26,13 +27,19 @@ OpenSCQ30 adds them.
   which is memory-heavy and can strain machines with limited RAM.
 - Your headphones paired over Bluetooth (`bluetoothctl` or your system
   Bluetooth settings) — normal OS-level pairing, separate from OpenSCQ30.
-- Your device registered with OpenSCQ30 itself:
-  ```
-  openscq30-cli list-models                     # find your model id
-  openscq30-cli paired-devices add \
-    --mac-address AA:BB:CC:DD:EE:FF \
-    --model SoundcoreXXXX
-  ```
+OpenSCQ30 also needs to know which model your headphones are. The plugin
+takes care of that: when a Soundcore device connects that OpenSCQ30 doesn't
+know yet, it registers it under the model whose name its Bluetooth name
+matches (e.g. "soundcore Liberty 4 NC" is `SoundcoreA3947`). If the name
+matches no model, or more than one, the panel says so, and you can register
+it yourself:
+
+```
+openscq30-cli list-models                     # find your model id
+openscq30-cli paired-devices add \
+  --mac-address AA:BB:CC:DD:EE:FF \
+  --model SoundcoreXXXX
+```
 
 ## Install
 
@@ -60,8 +67,21 @@ Any other sound mode or equalizer setting OpenSCQ30 exposes for your model
 shows up too, as buttons, a dropdown, a switch or a slider depending on its
 type.
 
+Below those, each other group of settings your model has gets a section of
+its own that expands when you click its title -- on the Liberty 4 NC, for
+example:
+
+- **Touch controls** — what a single, double, triple or long tap on each
+  earbud does (or nothing), and a reset to the defaults that takes a second
+  click to confirm
+- **Volume limit** — cap the volume, and how often it's checked
+- **Other settings** — gaming mode, surround sound, sound leak compensation,
+  auto play/pause, touch lock, tones and prompts, and auto power off
+- **About** — firmware versions, serial number, and how the earbuds are
+  linked
+
 If no supported device is connected, or your specific model doesn't expose
-sound mode/EQ settings in OpenSCQ30, the panel says so plainly instead of
+any settings in OpenSCQ30, the panel says so plainly instead of
 showing empty controls. If a change can't be applied or the settings can't be
 read (for example because another OpenSCQ30 client, such as its GUI, is
 connected to the headphones), the panel shows the reason.

@@ -6,6 +6,11 @@
 # and adds the settings openscq30 exposes for it (varies per model) and their
 # current values; if that fails, "error" says why. --quick stops once the
 # device is found, without connecting to it -- all the bar icon needs.
+#
+# A connected Soundcore device that openscq30 doesn't know yet is registered
+# with it (`openscq30-cli paired-devices add`) under the model its Bluetooth
+# name matches. One that matches no model, or more than one, is left alone
+# and reported as {"connected":false,"unrecognized":"<its name>"}.
 set -uo pipefail
 
 quick=false
@@ -21,9 +26,48 @@ paired_json=$(openscq30-cli paired-devices list --json 2>/dev/null)
 
 connected_raw=$(bluetoothctl devices Connected 2>/dev/null)
 
+models_json=""
+
+# The openscq30 model whose name is `$1`, if exactly one is. A model may go
+# by several names ("Soundcore Q30 / Life Q30"); case and spacing don't count.
+model_for_name() {
+  [ -n "$models_json" ] || models_json=$(openscq30-cli list-models --json 2>/dev/null)
+  jq -r --arg name "$1" '
+    def norm: ascii_downcase | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ");
+    ($name | norm) as $n
+    | [.[] | select(.name | split("/") | map(norm | if startswith("soundcore ") then . else "soundcore " + . end)
+                    | any(. == $n))
+           | .model]
+    | unique
+    | if length == 1 then .[0] else empty end
+  ' <<<"$models_json" 2>/dev/null
+}
+
+# Registers connected device `$1` named `$2` with openscq30 if its name
+# identifies the model, setting $registered to that model. Every openscq30
+# model name starts with "Soundcore", so nothing else is looked up.
+registered=""
+unrecognized=""
+register() {
+  registered=""
+  shopt -s nocasematch
+  [[ $2 == soundcore* ]] || { shopt -u nocasematch; return 1; }
+  shopt -u nocasematch
+  [[ $1 =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || return 1
+  local m
+  m=$(model_for_name "$2")
+  if [ -n "$m" ] && openscq30-cli paired-devices add --mac-address "$1" --model "$m" >/dev/null 2>&1; then
+    registered=$m
+    return 0
+  fi
+  [ -n "$unrecognized" ] || unrecognized=$(cut -c1-64 <<<"$2")
+  return 1
+}
+
 mac=""
 name=""
 model=""
+unpaired=()
 
 while IFS= read -r line; do
   [ -z "$line" ] && continue
@@ -36,10 +80,25 @@ while IFS= read -r line; do
     model="$m"
     break
   fi
+  unpaired+=("$line")
 done <<<"$connected_raw"
 
+# Only once no device openscq30 already knows is connected.
 if [ -z "$mac" ]; then
-  echo '{"connected":false}'
+  for line in "${unpaired[@]}"; do
+    cmac=$(awk '{print $2}' <<<"$line")
+    cname=$(cut -d' ' -f3- <<<"$line")
+    if register "$cmac" "$cname"; then
+      mac="$cmac"
+      name="$cname"
+      model="$registered"
+      break
+    fi
+  done
+fi
+
+if [ -z "$mac" ]; then
+  jq -cn --arg name "$unrecognized" '{connected:false} + if $name != "" then {unrecognized:$name} else {} end'
   exit 0
 fi
 
@@ -97,21 +156,18 @@ fi
 schema_json='[]'
 device_call list-settings --json && schema_json=$out
 
-filtered_schema=$(jq -c '[.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")]' <<<"$schema_json" 2>/dev/null)
+# Every category but EQ import/export, which the panel has no use for.
+filtered_schema=$(jq -c '[.[] | select(.categoryId != "equalizerImportExport")]' <<<"$schema_json" 2>/dev/null)
 [ -n "$filtered_schema" ] || filtered_schema='[]'
 
-# The setting types the panel can show; keep in step with CONTROL_TYPES in
-# Model.js.
+# The values of the setting types the panel shows; keep in step with
+# CONTROL_TYPES in Model.js. Actions have none.
 ids=$(jq -r '
-  [.[] | select(.categoryId=="soundModes" or .categoryId=="equalizer")
-       | .settings[]
-       | select(.type | IN("select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer"))
+  [.[] | .settings[]
+       | select(.type | IN("select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer", "information"))
        | .settingId]
-  + [.[] | select(.categoryId=="deviceInformation")
-        | .settings[] | select(.settingId | test("battery"; "i"))
-        | .settingId]
   | unique | .[]
-' <<<"$schema_json" 2>/dev/null)
+' <<<"$filtered_schema" 2>/dev/null)
 
 get_args=()
 while IFS= read -r id; do

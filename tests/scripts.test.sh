@@ -9,15 +9,28 @@ failures=0
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-# Fresh fake device state per test; also points the lock file at it.
+# Fresh fake device state per test; also points the lock file at it. The
+# device is a Space Q45 unless a fixture directory is given.
 setup() {
+  local fixture=${1:-$root/tests/fixtures}
   state=$(mktemp -d -p "$tmp_root")
-  cp "$root/tests/fixtures/schema.json" "$root/tests/fixtures/values.json" "$state/"
+  cp "$fixture/schema.json" "$fixture/values.json" "$state/"
+  cp "$root/tests/fixtures/models.json" "$state/"
+  echo "[{\"macAddress\":\"$mac\",\"model\":\"SoundcoreA3040\",\"isDemo\":false}]" >"$state/paired.json"
   export FAKE_SCQ_STATE=$state XDG_RUNTIME_DIR=$state
   export PATH="$root/tests/fake-bin:$PATH"
-  unset FAKE_BT_NONE FAKE_SCQ_DELAY SOUNDCORE_CALL_TIMEOUT SOUNDCORE_LOCK_TIMEOUT
+  unset FAKE_BT_NONE FAKE_BT_DEVICES FAKE_SCQ_DELAY SOUNDCORE_CALL_TIMEOUT SOUNDCORE_LOCK_TIMEOUT
 }
 
+# A Liberty 4 NC that openscq30 already knows.
+setup_liberty() {
+  setup "$root/tests/fixtures/liberty-4-nc"
+  echo "[{\"macAddress\":\"$mac\",\"model\":\"SoundcoreA3947\",\"isDemo\":false}]" >"$state/paired.json"
+  export FAKE_BT_DEVICES="Device $mac soundcore Liberty 4 NC"
+}
+
+paired_model() { jq -r --arg mac "$1" '.[] | select(.macAddress == $mac) | .model' "$state/paired.json"; }
+calls_of() { touch "$state/calls.log"; grep -c "^$1" "$state/calls.log" || true; }
 value() { jq -r --arg k "$1" '.[$k] | if type == "array" then join(",") else . end' "$state/values.json"; }
 device_calls() { touch "$state/calls.log"; grep -c '^device ' "$state/calls.log" || true; }
 
@@ -45,14 +58,74 @@ t_full_status() {
   jq -e --arg mac "$mac" '
     .connected and .detailed and .mac == $mac and .name == "Soundcore Space Q45"
     and .model == "SoundcoreA3040" and (has("error") | not)
-    and ([.schema[].categoryId] == ["soundModes", "equalizer"])
+    and ([.schema[].categoryId] == ["soundModes", "equalizer", "deviceInformation"])
     and .values == {
       ambientSoundMode: "NoiseCanceling", transparencyMode: "Manual", noiseCancelingMode: "Adaptive",
       manualNoiseCanceling: 5, windNoiseSuppression: true, manualTransparency: 5,
       presetEqualizerProfile: "Lounge", customEqualizerProfile: null,
-      volumeAdjustments: [-10,20,40,30,0,-20,20,10], batteryLevel: "4/5"
+      volumeAdjustments: [-10,20,40,30,0,-20,20,10], batteryLevel: "4/5",
+      serialNumber: "TEST000000000000", firmwareVersion: "02.61"
     }
   ' <<<"$out" >/dev/null
+}
+
+t_full_status_reads_every_category() {
+  setup_liberty
+  local out
+  out=$("$root/soundcore-status") || return 1
+  # Everything but the EQ import/export, which the panel has no use for, and
+  # every value but the reset action's, which has none.
+  jq -e --slurpfile want "$state/values.json" '
+    .model == "SoundcoreA3947" and (has("error") | not)
+    and ([.schema[].categoryId] == ["soundModes", "equalizer", "buttonConfiguration",
+                                    "limitHighVolume", "miscellaneous", "deviceInformation"])
+    and .values == $want[0]
+  ' <<<"$out" >/dev/null && ! grep -q resetButtonsToDefault "$state/calls.log"
+}
+
+t_registers_a_new_soundcore_device() {
+  setup
+  export FAKE_BT_DEVICES="Device 11:22:33:44:55:66 soundcore Liberty 4 NC"
+  local out
+  out=$("$root/soundcore-status" --quick) || return 1
+  jq -e '.connected and .mac == "11:22:33:44:55:66" and .model == "SoundcoreA3947"' <<<"$out" >/dev/null &&
+    [ "$(paired_model 11:22:33:44:55:66)" = SoundcoreA3947 ] &&
+    [ "$(paired_model "$mac")" = SoundcoreA3040 ]
+}
+
+t_registers_by_any_name_of_a_model() {
+  setup
+  export FAKE_BT_DEVICES="Device 11:22:33:44:55:66 Soundcore  Life Q30"
+  "$root/soundcore-status" --quick >/dev/null || return 1
+  [ "$(paired_model 11:22:33:44:55:66)" = SoundcoreA3028 ]
+}
+
+t_leaves_an_unknown_soundcore_device_alone() {
+  setup
+  export FAKE_BT_DEVICES="Device 11:22:33:44:55:66 soundcore Mystery 9"
+  [ "$("$root/soundcore-status" --quick)" = '{"connected":false,"unrecognized":"soundcore Mystery 9"}' ] &&
+    [ "$(calls_of "paired-devices add")" = 0 ]
+}
+
+t_does_not_guess_between_models_with_one_name() {
+  setup
+  export FAKE_BT_DEVICES="Device 11:22:33:44:55:66 Soundcore R50i"
+  "$root/soundcore-status" --quick >/dev/null || return 1
+  [ "$(calls_of "paired-devices add")" = 0 ]
+}
+
+t_ignores_other_bluetooth_devices() {
+  setup
+  export FAKE_BT_DEVICES="Device 11:22:33:44:55:66 MX Master 3"
+  [ "$("$root/soundcore-status" --quick)" = '{"connected":false}' ] && [ "$(calls_of list-models)" = 0 ]
+}
+
+t_prefers_a_known_device_over_registering_another() {
+  setup
+  export FAKE_BT_DEVICES=$'Device 11:22:33:44:55:66 soundcore Mystery 9\nDevice AA:BB:CC:DD:EE:FF Soundcore Space Q45'
+  local out
+  out=$("$root/soundcore-status" --quick) || return 1
+  jq -e --arg mac "$mac" '.connected and .mac == $mac and (has("unrecognized") | not)' <<<"$out" >/dev/null
 }
 
 t_quick_status_does_not_connect() {
@@ -186,7 +259,14 @@ t_set_usage() {
 
 check "no connected device reports disconnected" t_no_device
 check "full status reads schema, values and battery" t_full_status
+check "full status reads every category the panel shows" t_full_status_reads_every_category
 check "--quick finds the device without connecting to it" t_quick_status_does_not_connect
+check "a new Soundcore device is registered by its name" t_registers_a_new_soundcore_device
+check "any of a model's names identifies it" t_registers_by_any_name_of_a_model
+check "an unknown Soundcore device is reported, not registered" t_leaves_an_unknown_soundcore_device_alone
+check "a name shared by two models registers neither" t_does_not_guess_between_models_with_one_name
+check "other Bluetooth devices are ignored" t_ignores_other_bluetooth_devices
+check "a known device wins over an unknown one" t_prefers_a_known_device_over_registering_another
 check "status reports a failed device read as an error" t_status_reports_device_errors
 check "set waits for an in-flight status read instead of failing" t_set_during_status
 check "status waits for an in-flight set and sees its result" t_status_during_set

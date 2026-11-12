@@ -1,0 +1,536 @@
+[
+  {
+    "categoryId": "soundModes",
+    "settings": [
+      {
+        "settingId": "ambientSoundMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "NoiseCanceling",
+            "Transparency",
+            "Normal"
+          ],
+          "localizedOptions": [
+            "Noise Canceling",
+            "Transparency",
+            "Normal"
+          ]
+        }
+      },
+      {
+        "settingId": "transparencyMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "FullyTransparent",
+            "VocalMode"
+          ],
+          "localizedOptions": [
+            "Fully Transparent",
+            "Vocal Mode"
+          ]
+        }
+      },
+      {
+        "settingId": "noiseCancelingMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "Manual",
+            "Adaptive",
+            "Transportation"
+          ],
+          "localizedOptions": [
+            "Manual",
+            "Adaptive",
+            "Transportation"
+          ]
+        }
+      },
+      {
+        "settingId": "transportationMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "Plane",
+            "Train",
+            "Bus",
+            "Car"
+          ],
+          "localizedOptions": [
+            "Plane",
+            "Train",
+            "Bus",
+            "Car"
+          ]
+        }
+      },
+      {
+        "settingId": "manualNoiseCanceling",
+        "type": "i32Range",
+        "setting": {
+          "start": 1,
+          "end": 5,
+          "step": 1
+        }
+      },
+      {
+        "settingId": "adaptiveNoiseCanceling",
+        "type": "information"
+      },
+      {
+        "settingId": "windNoiseSuppression",
+        "type": "toggle"
+      },
+      {
+        "settingId": "environmentDetection",
+        "type": "toggle"
+      }
+    ]
+  },
+  {
+    "categoryId": "equalizer",
+    "settings": [
+      {
+        "settingId": "presetEqualizerProfile",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "SoundcoreSignature",
+            "Acoustic",
+            "BassBooster",
+            "BassReducer",
+            "Classical",
+            "Podcast",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "HipHop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "SmallSpeakers",
+            "SpokenWord",
+            "TrebleBooster",
+            "TrebleReducer"
+          ],
+          "localizedOptions": [
+            "Soundcore Signature",
+            "Acoustic",
+            "Bass Booster",
+            "Bass Reducer",
+            "Classical",
+            "Podcast",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "Hip Hop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "Small Speakers",
+            "Spoken Word",
+            "Treble Booster",
+            "Treble Reducer"
+          ]
+        }
+      },
+      {
+        "settingId": "customEqualizerProfile",
+        "type": "modifiableSelect",
+        "setting": {
+          "options": [],
+          "localizedOptions": []
+        }
+      },
+      {
+        "settingId": "volumeAdjustments",
+        "type": "equalizer",
+        "setting": {
+          "bandHz": [
+            100,
+            200,
+            400,
+            800,
+            1600,
+            3200,
+            6400,
+            12800
+          ],
+          "fractionDigits": 1,
+          "min": -120,
+          "max": 134
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "equalizerImportExport",
+    "settings": [
+      {
+        "settingId": "importCustomEqualizerProfiles",
+        "type": "importString"
+      },
+      {
+        "settingId": "exportCustomEqualizerProfiles",
+        "type": "multiSelect",
+        "setting": {
+          "options": [],
+          "localizedOptions": []
+        }
+      },
+      {
+        "settingId": "exportCustomEqualizerProfilesOutput",
+        "type": "information"
+      }
+    ]
+  },
+  {
+    "categoryId": "buttonConfiguration",
+    "settings": [
+      {
+        "settingId": "leftSinglePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "rightSinglePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "leftDoublePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "rightDoublePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "leftLongPress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "rightLongPress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "leftTriplePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "rightTriplePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "AmbientSoundMode",
+            "VoiceAssistant",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Ambient Sound Mode",
+            "Voice Assistant",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "resetButtonsToDefault",
+        "type": "action"
+      }
+    ]
+  },
+  {
+    "categoryId": "limitHighVolume",
+    "settings": [
+      {
+        "settingId": "limitHighVolume",
+        "type": "toggle"
+      },
+      {
+        "settingId": "limitHighVolumeDbLimit",
+        "type": "i32Range",
+        "setting": {
+          "start": 75,
+          "end": 100,
+          "step": 5
+        }
+      },
+      {
+        "settingId": "limitHighVolumeRefreshRate",
+        "type": "select",
+        "setting": {
+          "options": [
+            "RealTime",
+            "10s",
+            "1m"
+          ],
+          "localizedOptions": [
+            "Real Time",
+            "⁨10⁩ seconds",
+            "⁨1⁩ minute"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "miscellaneous",
+    "settings": [
+      {
+        "settingId": "touchTone",
+        "type": "toggle"
+      },
+      {
+        "settingId": "gamingMode",
+        "type": "toggle"
+      },
+      {
+        "settingId": "soundLeakCompensation",
+        "type": "toggle"
+      },
+      {
+        "settingId": "surroundSound",
+        "type": "toggle"
+      },
+      {
+        "settingId": "autoPlayPause",
+        "type": "toggle"
+      },
+      {
+        "settingId": "wearingTone",
+        "type": "toggle"
+      },
+      {
+        "settingId": "touchLock",
+        "type": "toggle"
+      },
+      {
+        "settingId": "lowBatteryPrompt",
+        "type": "toggle"
+      },
+      {
+        "settingId": "autoPowerOff",
+        "type": "select",
+        "setting": {
+          "options": [
+            "disabled",
+            "10m",
+            "20m",
+            "30m",
+            "60m"
+          ],
+          "localizedOptions": [
+            "Disabled",
+            "⁨10⁩ minutes",
+            "⁨20⁩ minutes",
+            "⁨30⁩ minutes",
+            "⁨60⁩ minutes"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "deviceInformation",
+    "settings": [
+      {
+        "settingId": "serialNumber",
+        "type": "information"
+      },
+      {
+        "settingId": "firmwareVersionLeft",
+        "type": "information"
+      },
+      {
+        "settingId": "firmwareVersionRight",
+        "type": "information"
+      },
+      {
+        "settingId": "twsStatus",
+        "type": "information"
+      },
+      {
+        "settingId": "hostDevice",
+        "type": "information"
+      },
+      {
+        "settingId": "isChargingLeft",
+        "type": "information"
+      },
+      {
+        "settingId": "isChargingRight",
+        "type": "information"
+      },
+      {
+        "settingId": "batteryLevelLeft",
+        "type": "information"
+      },
+      {
+        "settingId": "batteryLevelRight",
+        "type": "information"
+      },
+      {
+        "settingId": "caseBatteryLevel",
+        "type": "information"
+      }
+    ]
+  }
+]
