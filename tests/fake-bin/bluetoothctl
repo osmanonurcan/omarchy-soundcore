@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Stand-in for bluetoothctl used by tests/scripts.test.sh. Lists the devices
-# in $FAKE_BT_DEVICES (one "Device <mac> <name>" line each) as connected.
-if [ "$*" = "devices Connected" ] && [ -z "${FAKE_BT_NONE:-}" ]; then
-  printf '%s\n' "${FAKE_BT_DEVICES:-Device AA:BB:CC:DD:EE:FF Soundcore Space Q45}"
-fi
+# in $FAKE_BT_DEVICES (one "Device <mac> <name>" line each) as connected, and
+# shows this computer's adapter as 00:1A:7D:DA:71:13.
+case "$*" in
+  "devices Connected")
+    [ -z "${FAKE_BT_NONE:-}" ] && printf '%s\n' "${FAKE_BT_DEVICES:-Device AA:BB:CC:DD:EE:FF Soundcore Space Q45}"
+    ;;
+  show)
+    printf 'Controller 00:1A:7D:DA:71:13 (public)\n\tName: test\n\tPowered: yes\n'
+    ;;
+esac
+exit 0

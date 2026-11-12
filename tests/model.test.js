@@ -85,11 +85,11 @@ test("localPath turns a resolved file URL into a filesystem path", () => {
   assert.equal(Model.localPath("file:///home/me/my%20plugins/soundcore-set"), "/home/me/my plugins/soundcore-set")
 })
 
-test("friendlyModel names known models and falls back to the id", () => {
+test("friendlyModel names known models, and nothing else rather than an id", () => {
   assert.equal(Model.friendlyModel("SoundcoreA3040"), "Space Q45")
   assert.equal(Model.friendlyModel("SoundcoreA3947"), "Liberty 4 NC")
-  assert.equal(Model.friendlyModel("SoundcoreA9999"), "SoundcoreA9999")
-  assert.equal(Model.friendlyModel(""), "Unknown model")
+  assert.equal(Model.friendlyModel("SoundcoreA9999"), "")
+  assert.equal(Model.friendlyModel(""), "")
 })
 
 // ---- The Space Q45's real schema, as soundcore-status filters it ----
@@ -446,4 +446,60 @@ test("eqReadOnly: without custom profiles, a model's EQ bands can't be changed",
   assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile", "volumeAdjustments"])), true)
   assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile", "customEqualizerProfile", "volumeAdjustments"])), false)
   assert.equal(Model.eqReadOnly(eq(["presetEqualizerProfile"])), false)
+})
+
+// ---- The V20i's lights and the devices it remembers for dual connections ----
+const v20i = require("./fixtures/v20i/schema.json")
+const v20iValues = require("./fixtures/v20i/values.json")
+
+test("sections show a lights color and the dual connection devices", () => {
+  const sections = Model.sections(v20i, Object.assign({}, v20iValues, { lightsEnabled: true }))
+  assert.deepEqual(sections.find((s) => s.id === "lights").rows,
+    ["lightsEnabled", "lightsBrightness", "autoLightsOffMinutes", "lightsColor", "lightsMode"])
+  assert.deepEqual(sections.find((s) => s.id === "dualConnections").rows, ["dualConnections", "dualConnectionsDevices"])
+  assert.equal(Model.label("lightsColor"), "Color")
+  assert.equal(Model.label("dualConnectionsDevices"), "Devices")
+})
+
+test("readableIds reads back the lights color and the connected devices", () => {
+  const ids = Model.readableIds(v20i)
+  assert.equal(ids.includes("lightsColor"), true)
+  assert.equal(ids.includes("dualConnectionsDevices"), true)
+})
+
+test("a hue is a range of degrees, written as a number", () => {
+  const hue = Model.findSetting(v20i, "lightsColor")
+  assert.deepEqual(Model.rangeOf(hue), { min: 0, max: 359, step: 1, ticks: 360 })
+  assert.equal(Model.writeEntry(hue, 120.4, {}).arg, "120")
+  assert.equal(Model.rangeText("lightsColor", 120), "120°")
+})
+
+test("devices lists who the headphones remember, connected, and which is this computer", () => {
+  const setting = Model.findSetting(v20i, "dualConnectionsDevices")
+  assert.deepEqual(Model.devices(setting, v20iValues.dualConnectionsDevices, "00:1a:7d:da:71:13"), [
+    { mac: "00:1A:7D:DA:71:13", name: "Laptop", connected: true, thisComputer: true },
+    { mac: "11:22:33:44:55:66", name: "Pixel 8", connected: false, thisComputer: false }
+  ])
+  assert.deepEqual(Model.devices(null, [], ""), [])
+})
+
+test("forgetCommand removes a device, and the panel shows it gone at once", () => {
+  const setting = Model.findSetting(v20i, "dualConnectionsDevices")
+  assert.deepEqual(Model.forgetCommand(setting, "11:22:33:44:55:66"),
+    { id: "dualConnectionsDevices", arg: "-11:22:33:44:55:66", overlay: {}, command: true })
+  const status = { connected: true, schema: v20i, values: v20iValues }
+  const after = Model.withOptionRemoved(status, "dualConnectionsDevices", "11:22:33:44:55:66")
+  const remaining = Model.findSetting(after.schema, "dualConnectionsDevices").setting
+  assert.deepEqual(remaining.options, ["00:1A:7D:DA:71:13"])
+  assert.deepEqual(remaining.localizedOptions, ["Laptop"])
+})
+
+test("sections show the dual connection devices only while dual connections are on", () => {
+  const off = Model.sections(v20i, Object.assign({}, v20iValues, { dualConnections: false }))
+  assert.deepEqual(off.find((s) => s.id === "dualConnections").rows, ["dualConnections"])
+})
+
+test("sections show the lights' settings only while they're on", () => {
+  const off = Model.sections(v20i, Object.assign({}, v20iValues, { lightsEnabled: false }))
+  assert.deepEqual(off.find((s) => s.id === "lights").rows, ["lightsEnabled"])
 })

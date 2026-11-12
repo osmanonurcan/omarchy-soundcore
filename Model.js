@@ -1,6 +1,7 @@
 // Setting types the panel can change, and reads the values of; keep in step
 // with soundcore-status.
-var CONTROL_TYPES = ["select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer"]
+var CONTROL_TYPES = ["select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer",
+  "hueColorPicker", "multiSelectWithRemove"]
 // Also shown: read-only information, and actions, which have no value.
 var SHOWN_TYPES = CONTROL_TYPES.concat(["information", "action"])
 
@@ -45,11 +46,14 @@ var LABELS = {
   incomingCallsDuringBluetoothMode: "Incoming calls in Bluetooth mode",
   noiseCancelingModeInCycle: "Noise canceling in button cycle",
   transparencyModeInCycle: "Transparency in button cycle",
-  normalModeInCycle: "Normal in button cycle"
+  normalModeInCycle: "Normal in button cycle",
+  lightsColor: "Color",
+  dualConnectionsDevices: "Devices"
 }
 
 var UNITS = {
-  limitHighVolumeDbLimit: " dB"
+  limitHighVolumeDbLimit: " dB",
+  lightsColor: "°"
 }
 
 // What the "none" value of an optional select means.
@@ -76,7 +80,13 @@ var CONDITIONS = {
   transparencyMode: { ambientSoundMode: "Transparency" },
   manualTransparency: { ambientSoundMode: "Transparency", transparencyMode: "Manual" },
   limitHighVolumeDbLimit: { limitHighVolume: true },
-  limitHighVolumeRefreshRate: { limitHighVolume: true }
+  limitHighVolumeRefreshRate: { limitHighVolume: true },
+  lightsBrightness: { lightsEnabled: true },
+  autoLightsOffMinutes: { lightsEnabled: true },
+  lightsColor: { lightsEnabled: true },
+  lightsMode: { lightsEnabled: true },
+  // Headphones only report the devices they remember with these on.
+  dualConnectionsDevices: { dualConnections: true }
 }
 
 // A tap on a touch control: which earbud, if the model has two, and how.
@@ -277,6 +287,8 @@ function eqReadOnly(schema) {
 }
 
 function rangeOf(setting) {
+  // A hue, in degrees.
+  if (setting && setting.type === "hueColorPicker") return { min: 0, max: 359, step: 1, ticks: 360 }
   var range = (setting && setting.setting) || {}
   var min = Number(range.start) || 0
   var max = Number(range.end) || 0
@@ -327,6 +339,7 @@ function writeEntry(setting, value, bands) {
   // An action has no value to show, and like a profile command, must run
   // after the writes queued ahead of it and before those queued after.
   if (setting.type === "action") return { id: id, arg: "", overlay: {}, command: true }
+  if (setting.type === "hueColorPicker") value = Math.round(Number(value) || 0)
   // openscq30 reads a leading + or - as save/delete; \ marks a plain name.
   var arg = setting.type === "modifiableSelect" ? "\\" + value : formatValue(value)
   return { id: id, arg: arg, overlay: writeEffects(id, value, bands || {}) }
@@ -400,6 +413,52 @@ function withProfileChange(status, name, remove) {
   return Object.assign({}, status, { schema: schema })
 }
 
+// ---- Dual connections ----
+
+// The devices headphones with dual connections remember, by Bluetooth
+// address: which are connected, and which is this computer (`adapter`).
+function devices(setting, connected, adapter) {
+  var list = buildOptions(setting)
+  var on = (Array.isArray(connected) ? connected : []).map(function(mac) { return String(mac).toUpperCase() })
+  var self = String(adapter || "").toUpperCase()
+  return list.map(function(option) {
+    var mac = option.value.toUpperCase()
+    return {
+      mac: option.value,
+      name: option.label !== "" ? option.label : option.value,
+      connected: on.indexOf(mac) !== -1,
+      thisComputer: self !== "" && mac === self
+    }
+  })
+}
+
+// Make the headphones forget a device. openscq30 reads a leading - as remove.
+function forgetCommand(setting, mac) {
+  return { id: setting.settingId, arg: "-" + mac, overlay: {}, command: true }
+}
+
+// Show an option gone from a setting before the next full read.
+function withOptionRemoved(status, settingId, option) {
+  if (!status || !Array.isArray(status.schema)) return status
+  var schema = status.schema.map(function(category) {
+    return Object.assign({}, category, {
+      settings: (category.settings || []).map(function(setting) {
+        if (setting.settingId !== settingId || !setting.setting || !Array.isArray(setting.setting.options)) return setting
+        var index = setting.setting.options.indexOf(option)
+        if (index === -1) return setting
+        var options = setting.setting.options.slice()
+        var labels = (setting.setting.localizedOptions || options).slice()
+        options.splice(index, 1)
+        labels.splice(index, 1)
+        return Object.assign({}, setting, {
+          setting: Object.assign({}, setting.setting, { options: options, localizedOptions: labels })
+        })
+      })
+    })
+  })
+  return Object.assign({}, status, { schema: schema })
+}
+
 function cleanProfileName(name) {
   var trimmed = String(name || "").trim()
   return trimmed.length > 64 ? "" : trimmed
@@ -453,7 +512,8 @@ function friendlyModel(model) {
     "SoundcoreA3947": "Liberty 4 NC",
     "SoundcoreA3948": "A20i"
   }
-  return known[model] || model || "Unknown model"
+  // The device's own name, in the title, says which one it is anyway.
+  return known[model] || ""
 }
 
 // Battery levels, as the headphones report them: one for headphones, one per
@@ -537,6 +597,9 @@ if (typeof module !== "undefined") {
     withPendingWrites: withPendingWrites,
     withProfileChange: withProfileChange,
     cleanProfileName: cleanProfileName,
+    devices: devices,
+    forgetCommand: forgetCommand,
+    withOptionRemoved: withOptionRemoved,
     learnBands: learnBands,
     errorMessage: errorMessage,
     localPath: localPath,

@@ -56,10 +56,11 @@ Panel {
   readonly property string unrecognized: status.unrecognized || ""
   readonly property bool missingCli: status.missing === "openscq30-cli"
   readonly property var batteryList: Model.batteries(values)
-  // The model's name, unless the device's own name already says it.
+  // The model's name, if it's known and the device's own name doesn't
+  // already say it.
   readonly property string modelName: {
     var name = Model.friendlyModel(status.model)
-    return deviceName.toLowerCase().indexOf(name.toLowerCase()) === -1 ? name : ""
+    return name !== "" && deviceName.toLowerCase().indexOf(name.toLowerCase()) === -1 ? name : ""
   }
 
   readonly property var eqSetting: Model.findSetting(schemaList, "volumeAdjustments")
@@ -148,6 +149,14 @@ Panel {
     var setting = settingFor(id)
     if (!setting || Model.sameValue(root.values[id], value)) return
     enqueue(Model.writeEntry(setting, value, root.knownBands))
+  }
+
+  // Shows the device gone right away; the next full read confirms it.
+  function forgetDevice(id, mac) {
+    var setting = settingFor(id)
+    if (!setting || !root.connected) return
+    root.status = Model.withOptionRemoved(root.status, id, mac)
+    enqueue(Model.forgetCommand(setting, mac))
   }
 
   function enqueue(entry) {
@@ -312,7 +321,9 @@ Panel {
       value: root.values[modelData]
       label: Model.label(modelData)
       bar: root.bar
+      adapter: root.status.adapter || ""
       onEdited: function(v) { root.setSetting(row.modelData, v) }
+      onForget: function(mac) { root.forgetDevice(row.modelData, mac) }
       onPopupOpenChanged: root.notePopup(popupOpen)
       Component.onDestruction: if (popupOpen) root.notePopup(false)
     }

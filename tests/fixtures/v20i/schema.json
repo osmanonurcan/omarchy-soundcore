@@ -1,0 +1,429 @@
+[
+  {
+    "categoryId": "equalizer",
+    "settings": [
+      {
+        "settingId": "presetEqualizerProfile",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "SoundcoreSignature",
+            "Balanced",
+            "BassBooster",
+            "Classical",
+            "SpokenWord",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "HipHop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "SmallSpeakers",
+            "Podcast",
+            "TrebleBooster",
+            "TrebleReducer",
+            "VolumeBooster"
+          ],
+          "localizedOptions": [
+            "Soundcore Signature",
+            "Balanced",
+            "Bass Booster",
+            "Classical",
+            "Spoken Word",
+            "Dance",
+            "Deep",
+            "Electronic",
+            "Flat",
+            "Hip Hop",
+            "Jazz",
+            "Latin",
+            "Lounge",
+            "Piano",
+            "Pop",
+            "RnB",
+            "Rock",
+            "Small Speakers",
+            "Podcast",
+            "Treble Booster",
+            "Treble Reducer",
+            "Volume Booster"
+          ]
+        }
+      },
+      {
+        "settingId": "customEqualizerProfile",
+        "type": "modifiableSelect",
+        "setting": {
+          "options": [],
+          "localizedOptions": []
+        }
+      },
+      {
+        "settingId": "volumeAdjustments",
+        "type": "equalizer",
+        "setting": {
+          "bandHz": [
+            100,
+            200,
+            400,
+            800,
+            1600,
+            3200,
+            6400,
+            12800
+          ],
+          "fractionDigits": 1,
+          "min": -120,
+          "max": 134
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "buttonConfiguration",
+    "settings": [
+      {
+        "settingId": "leftSinglePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "rightSinglePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "PlayPause"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Play Pause"
+          ]
+        }
+      },
+      {
+        "settingId": "leftDoublePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "rightDoublePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "leftTriplePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "rightTriplePress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "leftLongPress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "rightLongPress",
+        "type": "optionalSelect",
+        "setting": {
+          "options": [
+            "VolumeUp",
+            "VolumeDown",
+            "PreviousSong",
+            "NextSong",
+            "VoiceAssistant",
+            "PlayPause",
+            "Lights"
+          ],
+          "localizedOptions": [
+            "Volume Up",
+            "Volume Down",
+            "Previous Song",
+            "Next Song",
+            "Voice Assistant",
+            "Play Pause",
+            "Colorful Lights Enabled"
+          ]
+        }
+      },
+      {
+        "settingId": "resetButtonsToDefault",
+        "type": "action"
+      }
+    ]
+  },
+  {
+    "categoryId": "lights",
+    "settings": [
+      {
+        "settingId": "lightsEnabled",
+        "type": "toggle"
+      },
+      {
+        "settingId": "lightsBrightness",
+        "type": "i32Range",
+        "setting": {
+          "start": 1,
+          "end": 10,
+          "step": 1
+        }
+      },
+      {
+        "settingId": "autoLightsOffMinutes",
+        "type": "i32Range",
+        "setting": {
+          "start": 1,
+          "end": 120,
+          "step": 1
+        }
+      },
+      {
+        "settingId": "lightsColor",
+        "type": "hueColorPicker",
+        "hue": 0.0
+      },
+      {
+        "settingId": "lightsMode",
+        "type": "select",
+        "setting": {
+          "options": [
+            "LightOn",
+            "Breathing",
+            "Flash",
+            "MusicFollows"
+          ],
+          "localizedOptions": [
+            "Light On",
+            "Breathing",
+            "Flash",
+            "Music Follows"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "dualConnections",
+    "settings": [
+      {
+        "settingId": "dualConnections",
+        "type": "toggle"
+      },
+      {
+        "settingId": "dualConnectionsDevices",
+        "type": "multiSelectWithRemove",
+        "setting": {
+          "options": [
+            "00:1A:7D:DA:71:13",
+            "11:22:33:44:55:66"
+          ],
+          "localizedOptions": [
+            "Laptop",
+            "Pixel 8"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "categoryId": "miscellaneous",
+    "settings": [
+      {
+        "settingId": "volumeBalance",
+        "type": "i32Range",
+        "setting": {
+          "start": -6,
+          "end": 6,
+          "step": 1
+        }
+      },
+      {
+        "settingId": "autoPowerOff",
+        "type": "select",
+        "setting": {
+          "options": [
+            "disabled",
+            "10m",
+            "20m",
+            "30m",
+            "60m"
+          ],
+          "localizedOptions": [
+            "Disabled",
+            "⁨10⁩ minutes",
+            "⁨20⁩ minutes",
+            "⁨30⁩ minutes",
+            "⁨60⁩ minutes"
+          ]
+        }
+      },
+      {
+        "settingId": "voicePrompt",
+        "type": "toggle"
+      },
+      {
+        "settingId": "gamingMode",
+        "type": "toggle"
+      }
+    ]
+  },
+  {
+    "categoryId": "deviceInformation",
+    "settings": [
+      {
+        "settingId": "twsStatus",
+        "type": "information"
+      },
+      {
+        "settingId": "hostDevice",
+        "type": "information"
+      },
+      {
+        "settingId": "batteryLevelLeft",
+        "type": "information"
+      },
+      {
+        "settingId": "batteryLevelRight",
+        "type": "information"
+      },
+      {
+        "settingId": "serialNumber",
+        "type": "information"
+      },
+      {
+        "settingId": "firmwareVersionLeft",
+        "type": "information"
+      },
+      {
+        "settingId": "firmwareVersionRight",
+        "type": "information"
+      }
+    ]
+  }
+]

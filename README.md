@@ -54,9 +54,11 @@ example:
 - **About** — firmware versions, serial number, and how the earbuds are
   linked
 
-Two kinds of settings OpenSCQ30 has aren't shown yet: the list of devices
-connected to headphones with multipoint (dual connections), and the color of
-models with lights.
+Models with dual connections (multipoint) also list the devices they
+remember, which of them are connected and which is this computer, and can
+forget the others (with a second click to confirm). Connecting or
+disconnecting one isn't possible from here: OpenSCQ30's command line can't do
+it. Models with lights get a color picker.
 
 If no supported device is connected, or your specific model doesn't expose
 any settings in OpenSCQ30, the panel says so plainly instead of showing empty

@@ -112,6 +112,9 @@ fi
 filtered_schema='[]'
 values_map='{}'
 error=""
+# This computer's Bluetooth address, so the panel can tell it apart from the
+# other devices headphones with dual connections remember.
+adapter=""
 
 emit() {
   jq -n \
@@ -122,8 +125,10 @@ emit() {
     --argjson schema "$filtered_schema" \
     --argjson values "$values_map" \
     --arg error "$error" \
+    --arg adapter "$adapter" \
     '{connected:true, detailed:$detailed, mac:$mac, name:$name, model:$model}
      + if $detailed then {schema:$schema, values:$values} else {} end
+     + if $detailed and $adapter != "" then {adapter:$adapter} else {} end
      + if $error != "" then {error:$error} else {} end'
 }
 
@@ -131,6 +136,8 @@ if $quick; then
   emit false
   exit 0
 fi
+
+adapter=$(bluetoothctl show 2>/dev/null | awk '/^Controller/ {print $2; exit}')
 
 errfile=$(mktemp) || exit 1
 trap 'rm -f "$errfile"' EXIT
@@ -171,7 +178,8 @@ filtered_schema=$(jq -c '[.[] | select(.categoryId != "equalizerImportExport")]'
 # CONTROL_TYPES in Model.js. Actions have none.
 ids=$(jq -r '
   [.[] | .settings[]
-       | select(.type | IN("select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer", "information"))
+       | select(.type | IN("select", "optionalSelect", "modifiableSelect", "toggle", "i32Range", "equalizer",
+                          "hueColorPicker", "multiSelectWithRemove", "information"))
        | .settingId]
   | unique | .[]
 ' <<<"$filtered_schema" 2>/dev/null)

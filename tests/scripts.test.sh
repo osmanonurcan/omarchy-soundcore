@@ -22,6 +22,13 @@ setup() {
   unset FAKE_BT_NONE FAKE_BT_DEVICES FAKE_SCQ_DELAY SOUNDCORE_CALL_TIMEOUT SOUNDCORE_LOCK_TIMEOUT
 }
 
+# A V20i, with lights and two devices it remembers for dual connections.
+setup_v20i() {
+  setup "$root/tests/fixtures/v20i"
+  echo "[{\"macAddress\":\"$mac\",\"model\":\"SoundcoreA3876\",\"isDemo\":false}]" >"$state/paired.json"
+  export FAKE_BT_DEVICES="Device $mac Soundcore V20i"
+}
+
 # A Liberty 4 NC that openscq30 already knows.
 setup_liberty() {
   setup "$root/tests/fixtures/liberty-4-nc"
@@ -81,6 +88,32 @@ t_full_status_reads_every_category() {
                                     "limitHighVolume", "miscellaneous", "deviceInformation"])
     and .values == $want[0]
   ' <<<"$out" >/dev/null && ! grep -q resetButtonsToDefault "$state/calls.log"
+}
+
+t_full_status_reads_lights_and_devices() {
+  setup_v20i
+  local out
+  out=$("$root/soundcore-status") || return 1
+  jq -e '(has("error") | not) and .values.lightsColor == 200
+         and .values.dualConnectionsDevices == ["00:1A:7D:DA:71:13"]
+         and .adapter == "00:1A:7D:DA:71:13"' <<<"$out" >/dev/null
+}
+
+t_quick_status_skips_the_adapter() {
+  setup_v20i
+  "$root/soundcore-status" --quick | jq -e 'has("adapter") | not' >/dev/null
+}
+
+t_set_changes_the_lights_color() {
+  setup_v20i
+  [ "$("$root/soundcore-set" "$mac" --get lightsColor lightsColor=120)" = '{"lightsColor":120}' ]
+}
+
+t_set_forgets_a_dual_connection_device() {
+  setup_v20i
+  "$root/soundcore-set" "$mac" 'dualConnectionsDevices=-11:22:33:44:55:66' >/dev/null || return 1
+  jq -e '[.[].settings[] | select(.settingId == "dualConnectionsDevices") | .setting.options] == [["00:1A:7D:DA:71:13"]]' \
+    "$state/schema.json" >/dev/null
 }
 
 t_registers_a_new_soundcore_device() {
@@ -271,7 +304,9 @@ check "no connected device reports disconnected" t_no_device
 check "a missing openscq30-cli is reported" t_reports_missing_openscq30
 check "full status reads schema, values and battery" t_full_status
 check "full status reads every category the panel shows" t_full_status_reads_every_category
+check "full status reads the lights' color, dual connection devices and adapter" t_full_status_reads_lights_and_devices
 check "--quick finds the device without connecting to it" t_quick_status_does_not_connect
+check "--quick leaves out this computer's adapter" t_quick_status_skips_the_adapter
 check "a new Soundcore device is registered by its name" t_registers_a_new_soundcore_device
 check "any of a model's names identifies it" t_registers_by_any_name_of_a_model
 check "an unknown Soundcore device is reported, not registered" t_leaves_an_unknown_soundcore_device_alone
@@ -290,6 +325,8 @@ check "set exits non-zero with the reason on stderr" t_set_reports_errors
 check "set gives up on a hung device" t_set_times_out_on_a_hung_device
 check "set gives up waiting for a stuck lock holder" t_set_gives_up_waiting_for_the_lock
 check "set rejects missing settings" t_set_usage
+check "set changes the lights' color" t_set_changes_the_lights_color
+check "set forgets a dual connection device" t_set_forgets_a_dual_connection_device
 
 echo
 if [ "$failures" -gt 0 ]; then

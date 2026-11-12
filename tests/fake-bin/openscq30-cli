@@ -70,6 +70,10 @@ apply_set() {
                                                   else error("provided string was not `true` or `false`") end)
       elif $s.type == "i32Range" then .[$k] = ($v | tonumber)
       elif $s.type == "optionalSelect" and $v == "" then .[$k] = null
+      elif $s.type == "hueColorPicker" then .[$k] = ($v | tonumber)
+      elif $s.type == "multiSelectWithRemove" and ($v | startswith("-")) then .[$k] = ((.[$k] // []) - [$v[1:]])
+      elif $s.type == "multiSelectWithRemove" then
+        error("expected value of type StringVec, got \($v)")
       elif $s.type == "modifiableSelect" and ($v | startswith("+")) then .
       elif $s.type == "modifiableSelect" and ($v | startswith("-")) then
         if .[$k] == $v[1:] then .[$k] = null else . end
@@ -83,6 +87,21 @@ apply_set() {
     return 1
   }
   mv "$state/values.json.tmp" "$state/values.json"
+
+  # Forgetting a dual connection device takes it off the options.
+  jq -e --arg k "$key" '[.[].settings[] | select(.settingId == $k and .type == "multiSelectWithRemove")] | length > 0' \
+    "$state/schema.json" >/dev/null && case "$raw" in
+    -*)
+      jq --arg k "$key" --arg mac "${raw:1}" '
+        map(.settings |= map(if .settingId == $k then
+          (.setting.options | index($mac)) as $i
+          | if $i == null then . else
+              .setting.options |= del(.[$i]) | .setting.localizedOptions |= del(.[$i]) end
+          else . end))
+      ' "$state/schema.json" >"$state/schema.json.tmp" && mv "$state/schema.json.tmp" "$state/schema.json"
+      return 0
+      ;;
+  esac
 
   # Saving or deleting a custom profile changes the options openscq30 lists.
   case "$raw" in

@@ -1,0 +1,42 @@
+{
+  "autoLightsOffMinutes": 1,
+  "autoPowerOff": "disabled",
+  "batteryLevelLeft": "1/10",
+  "batteryLevelRight": "1/10",
+  "customEqualizerProfile": null,
+  "dualConnections": true,
+  "firmwareVersionLeft": "00.00",
+  "firmwareVersionRight": "00.00",
+  "gamingMode": false,
+  "hostDevice": "Left",
+  "leftDoublePress": "VolumeUp",
+  "leftLongPress": "VolumeUp",
+  "leftSinglePress": "VolumeUp",
+  "leftTriplePress": "VolumeUp",
+  "lightsBrightness": 1,
+  "lightsEnabled": false,
+  "lightsMode": "LightOn",
+  "presetEqualizerProfile": "SoundcoreSignature",
+  "rightDoublePress": "VolumeUp",
+  "rightLongPress": "VolumeUp",
+  "rightSinglePress": "VolumeUp",
+  "rightTriplePress": "VolumeUp",
+  "serialNumber": "TEST000000000000",
+  "twsStatus": "Connected",
+  "voicePrompt": false,
+  "volumeAdjustments": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "volumeBalance": 0,
+  "lightsColor": 200.0,
+  "dualConnectionsDevices": [
+    "00:1A:7D:DA:71:13"
+  ]
+}
