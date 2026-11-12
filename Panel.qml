@@ -24,6 +24,11 @@ Panel {
   property var queuedWrites: []
   property var inflightWrites: []
   property string writeError: ""
+  // A device asked to be forgotten, { id, mac }, until a full read after the
+  // request shows whether the headphones did; and the devices they kept
+  // anyway, by address.
+  property var pendingForget: null
+  property var keptDevices: []
   property bool refreshQueued: false
 
   // The bands each preset and saved profile sets, as the device reported
@@ -94,6 +99,7 @@ Panel {
   function updateStatus(raw) {
     var parsed = Model.parseStatus(raw)
     if (parsed.detailed && !parsed.error) learnBands(parsed.model, parsed.values)
+    if (parsed.detailed && !parsed.error) checkForget(parsed.schema)
     var next = Model.mergeStatus(root.status, parsed)
     root.status = Model.withPendingWrites(next, root.inflightWrites, root.queuedWrites)
     syncBands()
@@ -155,8 +161,20 @@ Panel {
   function forgetDevice(id, mac) {
     var setting = settingFor(id)
     if (!setting || !root.connected) return
+    root.pendingForget = { id: id, mac: mac }
+    root.keptDevices = root.keptDevices.filter(function(kept) { return kept !== mac })
     root.status = Model.withOptionRemoved(root.status, id, mac)
     enqueue(Model.forgetCommand(setting, mac))
+  }
+
+  // Some headphones acknowledge a forget and keep the device anyway; the
+  // device's row says so rather than let it quietly come back. Only a read
+  // made after the request went out counts.
+  function checkForget(schema) {
+    var pending = root.pendingForget
+    if (!pending || root.inflightWrites.length > 0 || root.queuedWrites.length > 0) return
+    root.pendingForget = null
+    if (Model.remembers(schema, pending.id, pending.mac)) root.keptDevices = root.keptDevices.concat([pending.mac])
   }
 
   function enqueue(entry) {
@@ -322,6 +340,7 @@ Panel {
       label: Model.label(modelData)
       bar: root.bar
       adapter: root.status.adapter || ""
+      kept: root.keptDevices
       onEdited: function(v) { root.setSetting(row.modelData, v) }
       onForget: function(mac) { root.forgetDevice(row.modelData, mac) }
       onPopupOpenChanged: root.notePopup(popupOpen)

@@ -415,8 +415,14 @@ function withProfileChange(status, name, remove) {
 
 // ---- Dual connections ----
 
+function reversedMac(mac) {
+  return String(mac).split(":").reverse().join(":")
+}
+
 // The devices headphones with dual connections remember, by Bluetooth
 // address: which are connected, and which is this computer (`adapter`).
+// Some headphones (the Space Q45) report addresses byte-reversed, so this
+// computer is recognized in either order.
 function devices(setting, connected, adapter) {
   var list = buildOptions(setting)
   var on = (Array.isArray(connected) ? connected : []).map(function(mac) { return String(mac).toUpperCase() })
@@ -427,9 +433,16 @@ function devices(setting, connected, adapter) {
       mac: option.value,
       name: option.label !== "" ? option.label : option.value,
       connected: on.indexOf(mac) !== -1,
-      thisComputer: self !== "" && mac === self
+      thisComputer: self !== "" && (mac === self || mac === reversedMac(self))
     }
   })
+}
+
+// Whether the headphones still list the device at `mac`.
+function remembers(schema, settingId, mac) {
+  var setting = findSetting(schema, settingId)
+  return !!setting && !!setting.setting && Array.isArray(setting.setting.options)
+    && setting.setting.options.indexOf(mac) !== -1
 }
 
 // Make the headphones forget a device. openscq30 reads a leading - as remove.
@@ -598,6 +611,7 @@ if (typeof module !== "undefined") {
     withProfileChange: withProfileChange,
     cleanProfileName: cleanProfileName,
     devices: devices,
+    remembers: remembers,
     forgetCommand: forgetCommand,
     withOptionRemoved: withOptionRemoved,
     learnBands: learnBands,

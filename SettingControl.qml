@@ -14,8 +14,10 @@ Column {
   property var value
   property string label: ""
   property QtObject bar: null
-  // This computer's Bluetooth address, to tell it apart in a device list.
+  // This computer's Bluetooth address, to tell it apart in a device list,
+  // and the devices in it the headphones were asked to forget but kept.
   property string adapter: ""
+  property var kept: []
   readonly property bool popupOpen: dropdown.popupOpen
 
   // The user picked `value`.
@@ -239,24 +241,26 @@ Column {
           }
 
           Text {
+            readonly property bool kept: root.kept.indexOf(device.modelData.mac) !== -1
             visible: text !== ""
             width: parent.width
+            wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: device.modelData.thisComputer
+            text: kept ? "The headphones kept it when asked to forget it"
+              : device.modelData.thisComputer
               ? (device.modelData.connected ? "This computer · connected" : "This computer")
               : (device.modelData.connected ? "Connected" : "")
-            elide: Text.ElideRight
-            color: Qt.darker(root.bar.foreground, 1.3)
+            color: kept ? root.bar.urgent : Qt.darker(root.bar.foreground, 1.3)
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.caption
           }
         }
 
         // Forgetting this computer would drop the connection the panel
-        // talks through.
+        // talks through, and openscq30 only forgets disconnected devices.
         Button {
           id: forgetButton
-          visible: !device.modelData.thisComputer
+          visible: !device.modelData.thisComputer && !device.modelData.connected
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
           text: device.armed ? "Forget?" : "Forget"

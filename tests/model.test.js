@@ -503,3 +503,20 @@ test("sections show the lights' settings only while they're on", () => {
   const off = Model.sections(v20i, Object.assign({}, v20iValues, { lightsEnabled: false }))
   assert.deepEqual(off.find((s) => s.id === "lights").rows, ["lightsEnabled"])
 })
+
+test("devices knows this computer by its address in either byte order", () => {
+  // A Space Q45 lists its devices' addresses byte-reversed; this computer's
+  // adapter is 9C:B1:50:1C:22:D4.
+  const setting = { settingId: "dualConnectionsDevices", type: "multiSelectWithRemove",
+    setting: { options: ["BC:E2:1E:FB:80:AC", "D4:22:1C:50:B1:9C", "48:AD:30:E7:6A:DC"],
+               localizedOptions: ["Galaxy S20 FE", "omarchyorkman", "11 Pro"] } }
+  assert.deepEqual(Model.devices(setting, ["BC:E2:1E:FB:80:AC", "D4:22:1C:50:B1:9C"], "9C:B1:50:1C:22:D4")
+    .map((d) => [d.name, d.connected, d.thisComputer]),
+    [["Galaxy S20 FE", true, false], ["omarchyorkman", true, true], ["11 Pro", false, false]])
+})
+
+test("remembers says whether headphones still list a device after a full read", () => {
+  assert.equal(Model.remembers(v20i, "dualConnectionsDevices", "11:22:33:44:55:66"), true)
+  assert.equal(Model.remembers(v20i, "dualConnectionsDevices", "99:99:99:99:99:99"), false)
+  assert.equal(Model.remembers([], "dualConnectionsDevices", "11:22:33:44:55:66"), false)
+})
