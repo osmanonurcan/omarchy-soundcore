@@ -13,6 +13,10 @@ Panel {
   readonly property string statusScript: Model.localPath(Qt.resolvedUrl("soundcore-status"))
   readonly property string setScript: Model.localPath(Qt.resolvedUrl("soundcore-set"))
 
+  // The headphones' status as last read, with the changes to its lists the
+  // panel shows ahead of a read; and what the panel shows: that, with the
+  // writes not yet confirmed laid over it.
+  property var device: ({ connected: false })
   property var status: ({ connected: false })
   property var pendingBands: []
   property var draggingFlags: [false, false, false, false, false, false, false, false]
@@ -100,8 +104,12 @@ Panel {
     var parsed = Model.parseStatus(raw)
     if (parsed.detailed && !parsed.error) learnBands(parsed.model, parsed.values)
     if (parsed.detailed && !parsed.error) checkForget(parsed.schema)
-    var next = Model.mergeStatus(root.status, parsed)
-    root.status = Model.withPendingWrites(next, root.inflightWrites, root.queuedWrites)
+    root.device = Model.mergeStatus(root.device, parsed)
+    showStatus()
+  }
+
+  function showStatus() {
+    root.status = Model.withPendingWrites(root.device, root.inflightWrites, root.queuedWrites)
     syncBands()
   }
 
@@ -154,7 +162,7 @@ Panel {
     if (!root.connected || !root.status.mac) return
     var setting = settingFor(id)
     if (!setting || Model.sameValue(root.values[id], value)) return
-    enqueue(Model.writeEntry(setting, value, root.knownBands))
+    enqueue(Model.writeEntry(setting, value, root.knownBands, root.device.model))
   }
 
   // Shows the device gone right away; the next full read confirms it.
@@ -163,7 +171,7 @@ Panel {
     if (!setting || !root.connected) return
     root.pendingForget = { id: id, mac: mac }
     root.keptDevices = root.keptDevices.filter(function(kept) { return kept !== mac })
-    root.status = Model.withOptionRemoved(root.status, id, mac)
+    root.device = Model.withOptionRemoved(root.device, id, mac)
     enqueue(Model.forgetCommand(setting, mac))
   }
 
@@ -179,8 +187,7 @@ Panel {
 
   function enqueue(entry) {
     root.queuedWrites = Model.queueWrite(root.queuedWrites, entry)
-    root.status = Model.withPendingWrites(root.status, root.inflightWrites, root.queuedWrites)
-    syncBands()
+    showStatus()
     flushWrites()
   }
 
@@ -206,14 +213,13 @@ Panel {
     var readBack = ok ? Model.parseValues(setOut.text) : null
     root.inflightWrites = []
     root.writeError = ok ? "" : Model.errorMessage(setErr.text, exitCode)
-    if (readBack) {
-      learnBands(root.status.model, readBack)
-      root.status = Model.withPendingWrites(Model.withValues(root.status, readBack), [], root.queuedWrites)
-      syncBands()
-    }
+    if (readBack) learnBands(root.device.model, readBack)
+    root.device = Model.afterWrite(root.device, sent, readBack)
+    showStatus()
     if (root.queuedWrites.length > 0) flushWrites()
-    // A failed write leaves the panel showing what was asked for, and saving
-    // or deleting a profile changes the list; read the device again for both.
+    // A failed write may have gone through anyway (one that timed out, say),
+    // and saving or deleting a profile changes the list; read the device
+    // again for both.
     else if (!readBack || Object.keys(readBack).length === 0 || Model.hasCommand(sent)) refreshSoon()
   }
 
@@ -233,7 +239,7 @@ Panel {
     var name = Model.cleanProfileName(text)
     if (name === "" || !root.connected) return
     stopNaming()
-    root.status = Model.withProfileChange(root.status, name, false)
+    root.device = Model.withProfileChange(root.device, name, false)
     enqueue(Model.profileCommand(name, false, root.values))
   }
 
@@ -247,7 +253,7 @@ Panel {
       return
     }
     root.deleteArmed = false
-    root.status = Model.withProfileChange(root.status, name, true)
+    root.device = Model.withProfileChange(root.device, name, true)
     enqueue(Model.profileCommand(name, true, root.values))
   }
 

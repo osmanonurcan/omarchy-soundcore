@@ -312,13 +312,39 @@ function sameValue(current, next) {
   return formatValue(current) === formatValue(next)
 }
 
-// What else a write changes, so the panel can show it before the device
-// confirms. Picking a preset or saved profile sets the bands, which are
-// known once that preset or profile has been seen; moving a band leaves
+// Settings that can't both be on: turning one on makes the headphones turn
+// the other off themselves, without telling openscq30, so a read over the
+// same connection still has it on.
+var EXCLUSIVE = {
+  ldac: "dualConnections",
+  dualConnections: "ldac"
+}
+
+// The models known to. Newer ones (the P42i, say) allow LDAC with two
+// devices connected, so a model not here is left to the next read.
+var EXCLUSIVE_MODELS = [
+  "SoundcoreA3035", // Space One
+  "SoundcoreA3040", // Space Q45
+  "SoundcoreA3936", // Space A40
+  "SoundcoreA3954"  // Liberty 4 Pro
+]
+
+// What turning a setting on turns off on `model`.
+function exclusiveEffects(model, settingId, value) {
+  var overlay = {}
+  if (value === true && EXCLUSIVE[settingId] && EXCLUSIVE_MODELS.indexOf(model) !== -1)
+    overlay[EXCLUSIVE[settingId]] = false
+  return overlay
+}
+
+// What else a write changes on `model`, so the panel can show it before the
+// device confirms. Picking a preset or saved profile sets the bands, which
+// are known once that preset or profile has been seen; moving a band leaves
 // both.
-function writeEffects(settingId, value, bands) {
+function writeEffects(settingId, value, bands, model) {
   var overlay = {}
   overlay[settingId] = value
+  Object.assign(overlay, exclusiveEffects(model, settingId, value))
   if (settingId === "presetEqualizerProfile" && value !== "") {
     overlay.customEqualizerProfile = null
     if (bands["preset:" + value]) overlay.volumeAdjustments = bands["preset:" + value]
@@ -333,8 +359,8 @@ function writeEffects(settingId, value, bands) {
 }
 
 // A pending write: `arg` is the value soundcore-set sends, `overlay` the
-// values the panel shows until the device confirms them.
-function writeEntry(setting, value, bands) {
+// values the panel shows until the device, a `model`, confirms them.
+function writeEntry(setting, value, bands, model) {
   var id = setting.settingId
   // An action has no value to show, and like a profile command, must run
   // after the writes queued ahead of it and before those queued after.
@@ -342,7 +368,7 @@ function writeEntry(setting, value, bands) {
   if (setting.type === "hueColorPicker") value = Math.round(Number(value) || 0)
   // openscq30 reads a leading + or - as save/delete; \ marks a plain name.
   var arg = setting.type === "modifiableSelect" ? "\\" + value : formatValue(value)
-  return { id: id, arg: arg, overlay: writeEffects(id, value, bands || {}) }
+  return { id: id, arg: arg, overlay: writeEffects(id, value, bands || {}, model) }
 }
 
 // Save the current bands as profile `name`, or delete it. openscq30 reports a
@@ -385,8 +411,20 @@ function getArgs(ids) {
   return args
 }
 
+// The device's status once soundcore-set has run the writes `sent`, given
+// what it read back (null if it failed). A failed write changed nothing; the
+// panel stops showing it as soon as it's no longer pending.
+function afterWrite(device, sent, readBack) {
+  if (!readBack) return device
+  var values = Object.assign({}, readBack)
+  for (var i = 0; i < sent.length; i++)
+    Object.assign(values, exclusiveEffects(device.model, sent[i].id, sent[i].overlay[sent[i].id]))
+  return withValues(device, values)
+}
+
 // Show writes that haven't been confirmed yet, so the panel reflects a click
-// immediately instead of after the device round trip.
+// immediately instead of after the device round trip. `status` is the
+// device's own; the writes are laid over a copy.
 function withPendingWrites(status, inflight, queued) {
   if (!status || !status.connected) return status
   var values = Object.assign({}, status.values)
@@ -607,6 +645,7 @@ if (typeof module !== "undefined") {
     hasCommand: hasCommand,
     setArgs: setArgs,
     getArgs: getArgs,
+    afterWrite: afterWrite,
     withPendingWrites: withPendingWrites,
     withProfileChange: withProfileChange,
     cleanProfileName: cleanProfileName,

@@ -520,3 +520,46 @@ test("remembers says whether headphones still list a device after a full read", 
   assert.equal(Model.remembers(v20i, "dualConnectionsDevices", "99:99:99:99:99:99"), false)
   assert.equal(Model.remembers([], "dualConnectionsDevices", "11:22:33:44:55:66"), false)
 })
+
+const ldac = { settingId: "ldac", type: "toggle" }
+const dualConnections = { settingId: "dualConnections", type: "toggle" }
+
+test("afterWrite: a write that failed shows the device's value again, even while it can't be read", () => {
+  let device = Model.withValues(detailed, { ldac: false })
+  const sent = [Model.writeEntry(ldac, true, {})]
+  assert.equal(Model.withPendingWrites(device, sent, []).values.ldac, true)
+  device = Model.afterWrite(device, sent, null)
+  device = Model.mergeStatus(device, Object.assign({}, detailed, { error: "Connection refused" }))
+  const shown = Model.withPendingWrites(device, [], [])
+  assert.equal(shown.values.ldac, false)
+  assert.equal(shown.error, "Connection refused")
+})
+
+test("writeEntry: turning LDAC on shows dual connections off, and the other way round, on a Space Q45", () => {
+  assert.deepEqual(Model.writeEntry(ldac, true, {}, "SoundcoreA3040").overlay, { ldac: true, dualConnections: false })
+  assert.deepEqual(Model.writeEntry(dualConnections, true, {}, "SoundcoreA3040").overlay, { dualConnections: true, ldac: false })
+  assert.deepEqual(Model.writeEntry(ldac, false, {}, "SoundcoreA3040").overlay, { ldac: false })
+})
+
+test("writeEntry: LDAC leaves dual connections alone on models not known to turn them off", () => {
+  // The Liberty 5 may well allow both.
+  assert.deepEqual(Model.writeEntry(ldac, true, {}, "SoundcoreA3957").overlay, { ldac: true })
+  assert.deepEqual(Model.writeEntry(ldac, true, {}).overlay, { ldac: true })
+})
+
+test("afterWrite: dual connections the headphones turned off for LDAC stay off, though the read back has them on", () => {
+  // A Space Q45 turns them off itself; openscq30 only sees that on its next
+  // connection.
+  const device = Model.withValues(detailed, { ldac: false, dualConnections: true })
+  const after = Model.afterWrite(device, [Model.writeEntry(ldac, true, {}, device.model)],
+    { ldac: true, dualConnections: true, ambientSoundMode: "Transparency" })
+  assert.deepEqual([after.values.ldac, after.values.dualConnections, after.values.ambientSoundMode],
+    [true, false, "Transparency"])
+  assert.equal(device.values.dualConnections, true, "input must not be mutated")
+})
+
+test("afterWrite trusts the read back of dual connections on models not known to turn them off", () => {
+  const device = Model.withValues(Object.assign({}, detailed, { model: "SoundcoreA3957" }), { ldac: false, dualConnections: true })
+  const after = Model.afterWrite(device, [Model.writeEntry(ldac, true, {}, device.model)], { ldac: true, dualConnections: true })
+  assert.deepEqual([after.values.ldac, after.values.dualConnections], [true, true])
+})
