@@ -339,9 +339,6 @@ Panel {
         id: scrollArea
         anchors.fill: parent
         clip: true
-        // Controls at the left edge would have their 1px left border clipped
-        // away on a fractionally scaled screen; keep a border's width clear.
-        leftPadding: Math.max(Style.normalBorderWidth, Style.hoverBorderWidth)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
         // Shown for as long as there's more to scroll to, not only while
         // scrolling, so it's clear the panel goes on below. It's drawn over
@@ -351,9 +348,17 @@ Panel {
         rightPadding: barRoom
         ScrollBar.vertical.policy: overflows ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
 
+        // The scroll area clips at its own edges, and on a fractionally
+        // scaled screen that edge rounds to whole pixels; a control's 1px
+        // border right on it is cut away or kept depending on where the panel
+        // happens to sit. The content keeps a little clear of both edges.
+        readonly property real edgeInset: Style.space(2)
+        contentWidth: availableWidth
+
         Column {
           id: panelColumn
-          width: scrollArea.availableWidth
+          x: scrollArea.edgeInset
+          width: scrollArea.availableWidth - 2 * scrollArea.edgeInset
           spacing: Style.space(14)
 
           PanelHero {
