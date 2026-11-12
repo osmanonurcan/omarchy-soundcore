@@ -348,8 +348,9 @@ Panel {
           PanelHero {
             width: parent.width
             title: root.deviceName
-            meta: root.connected ? Model.friendlyModel(root.status.model) : "Disconnected"
-            detail: root.batteryText
+            // The title already names the device; the line under it has room
+            // for every battery level, which the detail pill doesn't.
+            meta: root.connected ? (root.batteryText || Model.friendlyModel(root.status.model)) : "Disconnected"
             foreground: root.bar.foreground
             fontFamily: root.bar.fontFamily
             iconComponent: Component {
