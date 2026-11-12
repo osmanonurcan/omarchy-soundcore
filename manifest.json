@@ -4,6 +4,7 @@
   "name": "Soundcore",
   "version": "1.2.0",
   "author": "osmanonurcan",
+  "license": "MIT",
   "description": "Control Soundcore headphone sound modes, ANC, equalizer, touch controls, and more",
   "kinds": [
     "bar-widget"

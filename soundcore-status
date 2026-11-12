@@ -160,7 +160,7 @@ device_call() {
 }
 
 # openscq30 allows one connection per device; serialize with soundcore-set.
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock"
+exec 9>>"${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/soundcore.lock"
 if ! flock -w "$lock_timeout" 9; then
   error="timed out waiting for another Soundcore command to finish"
   emit true

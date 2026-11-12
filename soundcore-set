@@ -38,7 +38,7 @@ call_timeout=${SOUNDCORE_CALL_TIMEOUT:-15}
 lock_timeout=${SOUNDCORE_LOCK_TIMEOUT:-40}
 
 # openscq30 allows one connection per device; serialize with soundcore-status.
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/soundcore.lock"
+exec 9>>"${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}}/soundcore.lock"
 if ! flock -w "$lock_timeout" 9; then
   echo "Error: timed out waiting for another Soundcore command to finish" >&2
   exit 1

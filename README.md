@@ -19,6 +19,24 @@ the plugin talks to your headphones through, isn't installed yet, the panel
 offers to install it; your headphones are registered with it automatically.
 [How it works](#how-it-works) has the details, and how to do either by hand.
 
+## Remove
+
+```
+omarchy plugin remove io.github.osmanonurcan.soundcore
+```
+
+That removes the widget and everything in its folder. OpenSCQ30 stays
+installed, and so do the headphones the plugin registered with it, since
+OpenSCQ30's own GUI and CLI use them too. To remove those as well, list them
+and remove each one:
+
+```
+openscq30-cli paired-devices list
+openscq30-cli paired-devices remove --mac-address AA:BB:CC:DD:EE:FF
+```
+
+then uninstall the `openscq30-cli-bin` package if nothing else needs it.
+
 ## Usage
 
 Click the headphone icon in the bar. The panel shows whichever Soundcore
@@ -94,6 +112,10 @@ omarchy pkg aur add openscq30-cli-bin
 Prefer the `-bin` package unless you specifically need a newer version —
 building `openscq30-cli` from source also compiles its GUI counterpart, which
 is memory-heavy and can strain machines with limited RAM.
+
+The plugin's scripts also use `jq`, `bluetoothctl` (`bluez-utils`), `flock`
+(`util-linux`) and `timeout` (`coreutils`), which a standard Omarchy install
+already has.
 
 ### Registering your headphones
 
