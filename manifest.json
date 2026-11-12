@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "io.github.osmanonurcan.soundcore",
-  "name": "Soundcore",
+  "name": "Soundcore Control",
   "version": "1.2.0",
   "author": "osmanonurcan",
   "license": "MIT",
@@ -13,8 +13,8 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Soundcore",
-    "description": "Sound mode, ANC, and equalizer for your Soundcore headphones",
+    "displayName": "Soundcore Control",
+    "description": "Sound mode, ANC, equalizer, touch controls and more for your Soundcore headphones",
     "category": "Audio",
     "allowMultiple": false
   }

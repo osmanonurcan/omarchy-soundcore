@@ -1,4 +1,4 @@
-# Soundcore
+# Soundcore Control
 
 An [Omarchy](https://omarchy.org/) shell plugin that adds a bar widget for
 controlling Soundcore headphones and earbuds: sound mode (ANC/Transparency/
