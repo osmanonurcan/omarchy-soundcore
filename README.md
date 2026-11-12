@@ -68,7 +68,8 @@ OpenSCQ30-paired device is currently connected over Bluetooth:
 - **Equalizer preset** — dropdown of the device's built-in presets
 - **My EQ profiles** — save the current EQ under a name, switch between saved
   profiles, and delete them (OpenSCQ30 keeps these on your computer)
-- **Custom EQ** — live sliders per band; dragging one applies immediately
+- **Custom EQ** — live sliders per band (click its title to show them);
+  dragging one applies immediately
   and clears the active preset
 
 Any other sound mode or equalizer setting OpenSCQ30 exposes for your model

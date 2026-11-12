@@ -322,7 +322,9 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(360))
+    // Wider by the scroll bar's room when it shows, so the content keeps its
+    // width: a row of choices can't shrink to fit.
+    contentWidth: panel.fittedContentWidth(Style.space(360) + scrollArea.barRoom)
     contentHeight: panel.fittedContentHeight(panelColumn.implicitHeight, Style.space(560))
 
     PanelKeyCatcher {
@@ -341,7 +343,13 @@ Panel {
         // away on a fractionally scaled screen; keep a border's width clear.
         leftPadding: Math.max(Style.normalBorderWidth, Style.hoverBorderWidth)
         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        ScrollBar.vertical.policy: panelColumn.implicitHeight > height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+        // Shown for as long as there's more to scroll to, not only while
+        // scrolling, so it's clear the panel goes on below. It's drawn over
+        // the content, so the content keeps clear of it.
+        readonly property bool overflows: panelColumn.implicitHeight > height
+        readonly property real barRoom: overflows ? ScrollBar.vertical.width + Style.space(8) : 0
+        rightPadding: barRoom
+        ScrollBar.vertical.policy: overflows ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
 
         Column {
           id: panelColumn
@@ -536,19 +544,24 @@ Panel {
               }
             }
 
+            // Collapsed like the sections below, since its eight bands are
+            // most of the panel's height.
             Column {
+              id: customEq
+              readonly property bool expanded: !!root.expandedSections.customEq
               visible: !!root.eqSetting
               width: parent.width
               spacing: Style.space(10)
 
-              PanelSectionHeader {
-                text: "CUSTOM EQ"
-                foreground: root.bar.foreground
-                fontFamily: root.bar.fontFamily
+              SectionHeader {
+                title: "Custom EQ"
+                expanded: customEq.expanded
+                bar: root.bar
+                onToggled: root.toggleSection("customEq")
               }
 
               Repeater {
-                model: root.eqSetting ? root.eqSetting.setting.bandHz.length : 0
+                model: root.eqSetting && customEq.expanded ? root.eqSetting.setting.bandHz.length : 0
 
                 Column {
                   id: bandRow
@@ -620,38 +633,11 @@ Panel {
                 foreground: root.bar.foreground
               }
 
-              Item {
-                width: parent.width
-                implicitHeight: sectionTitle.implicitHeight
-
-                PanelSectionHeader {
-                  id: sectionTitle
-                  anchors.left: parent.left
-                  anchors.right: chevron.left
-                  text: section.modelData.title.toUpperCase()
-                  elide: Text.ElideRight
-                  foreground: root.bar.foreground
-                  fontFamily: root.bar.fontFamily
-                }
-
-                Text {
-                  id: chevron
-                  anchors.right: parent.right
-                  anchors.verticalCenter: sectionTitle.verticalCenter
-                  textFormat: Text.PlainText
-                  text: section.expanded ? "󰅀" : "󰅂"
-                  color: Qt.darker(root.bar.foreground, sectionArea.containsMouse ? 1.0 : 1.4)
-                  font.family: root.bar.fontFamily
-                  font.pixelSize: Style.font.body
-                }
-
-                MouseArea {
-                  id: sectionArea
-                  anchors.fill: parent
-                  hoverEnabled: true
-                  cursorShape: Qt.PointingHandCursor
-                  onClicked: root.toggleSection(section.modelData.id)
-                }
+              SectionHeader {
+                title: section.modelData.title
+                expanded: section.expanded
+                bar: root.bar
+                onToggled: root.toggleSection(section.modelData.id)
               }
 
               Column {
