@@ -183,5 +183,7 @@ Column {
     tickCount: root.range.ticks <= 11 ? root.range.ticks : 0
     value: root.value === undefined || root.value === null ? root.range.min : Number(root.value)
     onReleased: function(v) { root.edited(root.snap(v)) }
+
+    WheelScroll {}
   }
 }

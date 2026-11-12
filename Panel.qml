@@ -597,6 +597,8 @@ Panel {
                       root.moveBand(bandRow.index, v)
                       root.commitBands()
                     }
+
+                    WheelScroll {}
                   }
                 }
               }
